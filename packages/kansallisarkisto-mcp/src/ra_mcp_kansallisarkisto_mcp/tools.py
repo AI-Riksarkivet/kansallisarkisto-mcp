@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import threading
+
 from fastmcp import FastMCP
 
 from ra_mcp_kansallisarkisto_lib.config import DF_TABLE
@@ -45,6 +47,10 @@ kansallisarkisto_mcp: FastMCP = FastMCP(
 )
 
 _search: DfSearch | None = None
+# Tools run in a worker threadpool, so first use is genuinely concurrent: without
+# this, 64 simultaneous first calls built 16 separate facades, each repeating the
+# table listing. Harmless but not what "process-wide" claims.
+_search_lock = threading.Lock()
 
 
 def get_search() -> DfSearch:
@@ -56,10 +62,12 @@ def get_search() -> DfSearch:
     """
     global _search
     if _search is None:
-        db = get_lancedb(settings.lancedb_uri)
-        if DF_TABLE not in table_names(db):
-            raise MissingTableError(MISSING_TABLE)
-        _search = DfSearch(db)
+        with _search_lock:
+            if _search is None:
+                db = get_lancedb(settings.lancedb_uri)
+                if DF_TABLE not in table_names(db):
+                    raise MissingTableError(MISSING_TABLE)
+                _search = DfSearch(db)
     return _search
 
 
