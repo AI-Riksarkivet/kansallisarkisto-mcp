@@ -63,5 +63,23 @@ def get_search() -> DfSearch:
     return _search
 
 
+def readiness() -> tuple[bool, str]:
+    """Whether the server can actually answer a search, for the /ready probe.
+
+    Goes through get_search() rather than re-implementing the check, so readiness
+    and the tools agree by construction: if this says ready, a tool call will not
+    come back with the missing-table error. Cheap after the first call — the
+    DfSearch facade is cached — and it never raises, because a probe that 500s
+    tells an orchestrator less than one that reports "not ready" and why.
+    """
+    try:
+        get_search()
+    except MissingTableError:
+        return False, MISSING_TABLE
+    except Exception as exc:  # noqa: BLE001 - a probe must answer, not raise
+        return False, f"{type(exc).__name__}: {exc}"
+    return True, DF_TABLE
+
+
 register_df_tools(kansallisarkisto_mcp, get_search)
-register_routes(kansallisarkisto_mcp)
+register_routes(kansallisarkisto_mcp, readiness)

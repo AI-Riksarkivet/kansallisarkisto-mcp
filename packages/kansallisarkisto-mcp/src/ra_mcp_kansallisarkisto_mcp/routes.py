@@ -1,66 +1,56 @@
-"""Plain HTTP routes beside /mcp: the landing page, liveness and readiness.
+"""Plain HTTP routes beside /mcp: the landing page, and the two probes.
 
 The landing page is what a browser sees at the server root; it lives inside the
 package so it ships in the wheel and the Docker image, where docs/ does not.
 
-`/health` and `/ready` answer different questions, and conflating them is what
-sends traffic to a server that cannot serve. The process boots deliberately
-without data — the image ships empty and the table is mounted separately — so
-"the process is up" and "a search will work" are genuinely different states.
+``/health`` and ``/ready`` answer different questions, and conflating them is
+what made the earlier single probe misleading. The server boots on purpose
+without a table — that is a deliberate design choice, so that a missing mount is
+a readable message rather than a crash loop — which means "the process is up"
+and "the process can answer a search" are genuinely different states. A single
+always-200 probe reported the first while an orchestrator needed the second, and
+would happily route traffic to a server whose every tool call returned the
+missing-table error.
+
+So: ``/health`` is liveness (is the process serving HTTP at all — restart it if
+not), ``/ready`` is readiness (can it actually search — hold traffic back until
+it can). Same split as ra-mcp.
 """
 
 from __future__ import annotations
 
-import logging
+from collections.abc import Callable
 from importlib.resources import files
 
 from fastmcp import FastMCP
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 
-from ra_mcp_kansallisarkisto_lib.config import DF_TABLE
-
-logger = logging.getLogger(__name__)
-
 _INDEX_HTML = files("ra_mcp_kansallisarkisto_mcp").joinpath("assets/index.html").read_text(encoding="utf-8")
 
 
-def register_routes(mcp: FastMCP) -> None:
+def register_routes(mcp: FastMCP, readiness: Callable[[], tuple[bool, str]]) -> None:
+    """Register the landing page and the liveness/readiness probes.
+
+    ``readiness`` is injected rather than imported so this module stays free of a
+    dependency on ``tools`` — which imports *this* module, and would otherwise
+    make a cycle. Same reason ``register_df_tools`` takes ``get_search``.
+    """
+
     @mcp.custom_route("/", methods=["GET"])
     async def root(_: Request) -> HTMLResponse:
         return HTMLResponse(_INDEX_HTML)
 
     @mcp.custom_route("/health", methods=["GET"])
     async def health(_: Request) -> JSONResponse:
-        """Liveness: the process is running. Restarting it would not help with
-        anything else, so this stays 200 even with no table mounted."""
+        # Liveness only. Deliberately does not touch LanceDB: a probe that fails
+        # when the data is missing would restart a process that is working
+        # exactly as designed.
         return JSONResponse({"status": "ok"})
 
     @mcp.custom_route("/ready", methods=["GET"])
     async def ready(_: Request) -> JSONResponse:
-        """Readiness: a search would actually succeed.
-
-        Runs the same one-row probe the boot check uses, because listing table
-        names only reads the manifest — which stays readable in the case that
-        bites hardest, a table whose data files the runtime user cannot read.
-        503 so an orchestrator holds traffic back rather than routing it to a
-        server whose every tool call is an error message.
-        """
-        # Imported here rather than at module scope: routes are registered while
-        # tools is still being imported, so a top-level import would cycle.
-        from ra_mcp_kansallisarkisto_mcp.errors import MissingTableError
-        from ra_mcp_kansallisarkisto_mcp.tools import get_search
-
-        try:
-            get_search().search("probe", limit=1)
-        except MissingTableError as exc:
-            return JSONResponse({"status": "not ready", "table": DF_TABLE, "reason": str(exc)}, status_code=503)
-        except Exception as exc:
-            # The detail belongs in the log, not the probe body: a readiness
-            # endpoint is usually reachable from further away than the logs are.
-            logger.exception("readiness probe failed")
-            return JSONResponse(
-                {"status": "not ready", "table": DF_TABLE, "reason": f"the table is present but cannot be queried ({type(exc).__name__})"},
-                status_code=503,
-            )
-        return JSONResponse({"status": "ready", "table": DF_TABLE})
+        ok, detail = readiness()
+        if ok:
+            return JSONResponse({"status": "ready", "table": detail})
+        return JSONResponse({"status": "not ready", "reason": detail}, status_code=503)
