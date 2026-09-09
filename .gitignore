@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+# Harvested Sisältöhaku corpora (6.3 GB of .jsonl.gz) — the ingest input.
+# Never committed: re-harvest from sisaltohaku.demo.kansallisarkisto.fi instead.
+.data/
+# Built LanceDB tables (rebuilt via `make ingest-df`)
+data/
+.env
+site/
+# zensical's incremental build cache, written next to zensical.toml
+.cache/
