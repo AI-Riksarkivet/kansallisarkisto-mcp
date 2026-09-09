@@ -140,6 +140,12 @@ class DfRecord(BaseModel):
         keeps them in the result set.
         """
         parts = [
+            # The citation itself, so that every record is reachable by *some*
+            # keyword. Four charters carry no transcript, place, index term or
+            # language at all, and were findable only if you already knew their
+            # number. Written as "df <number>" rather than a fused token so the
+            # way a researcher actually types it — "DF 404" — matches both terms.
+            f"df {self.df}" if self.df else "",
             strip_editorial_apparatus(self.transcript),
             self.issuingplace,
             self.issuingplacecountry,
