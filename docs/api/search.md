@@ -16,7 +16,7 @@ DfSearch(db, *, table_name="df")
 search(
     keyword, *, limit=25, offset=0,
     language=None, issuingplace=None, country=None,
-    year_min=None, year_max=None, match_all=True,
+    year_min=None, year_max=None, match_all=True, fuzzy=0,
 ) -> SearchResult
 ```
 
@@ -24,9 +24,17 @@ search(
 word, `False` matches any of them. A quoted keyword is passed to the query parser instead,
 so `'"de ecclesia"'` is an exact phrase.
 
-Raises `ValueError` for a blank keyword, a negative offset or a limit below 1 — guarded
-centrally, so a bad page cannot produce an empty result with a nonzero total and a broken
-`offset=-N` footer.
+`fuzzy` is the edit distance allowed per term. It is `0` by default because the engine makes
+fuzzy matching and stemming mutually exclusive — a fuzzy term skips the analysis pipeline and
+is matched raw against stemmed index terms, so `konungen` collapses from 279 hits to 6.
+Raise it to `1` to reach spelling variants, which is the corpus's largest recall problem, and
+pass a base form when you do. The query parser has no fuzziness argument, so combining it
+with a quoted phrase is rejected rather than silently ignored.
+
+Raises `SearchInputError` — a `ValueError` subclass — for a blank keyword, a negative offset,
+a limit below 1, or `fuzzy` on a quoted phrase. It is a distinct type because the MCP layer
+returns its message to the caller verbatim, and lancedb raises plain `ValueError`s whose
+messages quote dataset paths and internal query structure.
 
 ### `get_charter`
 
@@ -58,7 +66,7 @@ lancedb still auto-projects it when a `select` omits it but warns that it will s
 ```python
 lancedb_fts_search(
     db, table_name, keyword, *,
-    limit, offset=0, where=None, columns=None, match_all=True,
+    limit, offset=0, where=None, columns=None, match_all=True, fuzzy=0,
 ) -> SearchResult
 ```
 

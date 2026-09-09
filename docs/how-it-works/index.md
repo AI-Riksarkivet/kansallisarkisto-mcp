@@ -28,9 +28,10 @@ Two workspace packages:
 - **`SearchResult`** — one page plus a true total.
 - **`get_lancedb`** — a process-cached, thread-safe connection per URI. LanceDB connections
   have no `close()`; one per URI for the process lifetime is the intended usage.
-- **`build_fts_index`** — the Swedish full-text index, with stemming, stop-word removal,
-  accent folding and a raised token-length limit, all passed explicitly rather than left to
-  a lancedb default that has moved between releases.
+- **`build_fts_index`** — the Swedish full-text index: stemming, accent folding, a raised
+  token-length limit, and stop-word removal deliberately **off** (Swedish stop words are
+  Latin content words here — removing them cost `de` 1,735 documents). Each is passed
+  explicitly rather than left to a lancedb default that has moved between releases.
 - **`build_scalar_indexes`** — BTree on ordered columns, Bitmap on low-cardinality
   categoricals, so a `.where()` filter is an index lookup and not a column scan.
 - **`lancedb_fts_search`** — the paginated search itself.

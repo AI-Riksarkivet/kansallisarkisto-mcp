@@ -23,6 +23,22 @@ Without a table the server still boots, logs which tables it did find, and answe
 call with a clear missing-table message. That is deliberate: a container that crash-loops on a
 missing mount is harder to diagnose than one that says what it is missing.
 
+### Liveness and readiness are different questions
+
+`/health` answers "the process is up" and stays 200 even with no table mounted — restarting
+would not conjure one. `/ready` answers "a search would actually succeed", and returns **503**
+with a reason when it would not:
+
+```json
+{"status": "not ready", "table": "df", "reason": "The df table is not available on this server. …"}
+```
+
+It runs the same one-row probe as the boot check, because listing table names only reads the
+manifest — which stays readable in exactly the case that bites hardest, a table whose data
+files the runtime user cannot read (below). Point an orchestrator's readiness probe at
+`/ready` and its liveness probe at `/health`; using `/health` for both routes traffic to a
+server whose every tool call is an error message.
+
 ### The table has to be readable by uid 1000
 
 **lance writes its data and index files mode `0600`** — owner-only. The container runs as

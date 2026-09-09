@@ -51,6 +51,16 @@ been trained to trust it.
 
 ### 1. `get_charter` raises instead of returning `None` above 2³¹
 
+!!! success "Resolved"
+
+    The `int()` guard now range-checks against the int32 column, so an out-of-range number
+    returns `None` as documented rather than surfacing as an internal error.
+
+!!! success "Resolved"
+
+    `get_charter` now range-checks against `int32` and returns `None`; verified for
+    `2**31`, `2**63` and `10**20`.
+
 `df_number` is an `int32` column. Any number at or above `2**31` fails predicate resolution:
 
 ```
@@ -70,6 +80,17 @@ check, or adding `le=2**31 - 1` to the field, restores the documented contract.
 
 ### 2. `fuzzy` is silently ignored for a quoted keyword
 
+!!! success "Resolved"
+
+    The combination now raises with a sentence saying what to do instead, and the MCP layer
+    returns caller-fixable `ValueError`s verbatim rather than folding them into the generic
+    internal-error reply. The field description says it too.
+
+!!! success "Resolved"
+
+    The combination is now rejected with an actionable sentence rather than silently
+    dropped — see finding 12 for the disclosure bug that fix briefly introduced.
+
 `lancedb_fts_search` routes any keyword containing `"` to the raw query parser, which takes no
 fuzziness argument — so `fuzzy` is dropped with no signal:
 
@@ -86,6 +107,15 @@ year range already uses.
 
 ### 3. Two docstrings state the wrong default for `fuzzy`
 
+!!! success "Resolved"
+
+    Both corrected, and `test_search_invariants.py` now asserts the docstring against the
+    constant — the point being that nothing tested prose.
+
+!!! success "Resolved"
+
+    Both now say 0, matching `DEFAULT_FUZZINESS` and the reasoning around it.
+
 ```
 dataset.py:236           "see DEFAULT_FUZZINESS for why it defaults to 1 rather than 0"
 search_operations.py:63  "fuzzy: Edit distance allowed per term (default 1)."
@@ -100,6 +130,12 @@ around them. Confirmed on the fixture: `konungen` gives 3 hits at `fuzzy=0` and 
 Nothing tests a docstring, and `docs/api/` is written by hand from these, so this propagates.
 
 ### 4. `/health` reports OK while every tool call fails
+
+!!! success "Resolved"
+
+    `/ready` added, returning 503 with a reason when a search would fail, and running the
+    same one-row probe as the boot check rather than trusting a table listing. `/health` is
+    unchanged and remains liveness — restarting the process would not conjure a table.
 
 Verified: with the LanceDB URI pointed at an empty directory, `GET /health` returns `200
 {"status": "ok"}` while `df_search` returns `The df table is not available on this server`.
@@ -198,6 +234,10 @@ GitHub release that a dispatch run does not have.
 
 ### 6. The fixture holds 18 charters, and seven places say 16
 
+!!! success "Resolved"
+
+    All seven now say 18, derived from `wc -l` on the fixture rather than retyped.
+
 `df_sample.jsonl` has 18 lines. `test_ingest.py` asserts `DF_FIXTURE_ROWS = 18` and passes.
 The prose says 16 in:
 
@@ -214,6 +254,11 @@ following.
 
 ### 7. `docs/api/search.md` is the one page that never learned about `fuzzy`
 
+!!! success "Resolved"
+
+    Both signatures now carry `fuzzy=0`, with the stemming trade-off and the quoted-phrase
+    rejection written out, plus the `SearchInputError` contract from 12 below.
+
 It reproduces both signatures exactly — and both omit the parameter:
 
 ```python
@@ -229,6 +274,10 @@ API reference — the page whose whole job is the signature — is the one that 
 
 ### 8. `docs/how-it-works/index.md` credits the index with stop-word removal
 
+!!! success "Resolved"
+
+    The bullet now says stop-word removal is deliberately **off**, and why.
+
 > **`build_fts_index`** — the Swedish full-text index, with stemming, stop-word removal,
 > accent folding and a raised token-length limit …
 
@@ -240,10 +289,18 @@ words are **kept**, unlike a normal Swedish index"). `remove_stop_words=False` i
 
 ### 9. README duplicates its architecture bullets
 
+!!! success "Resolved"
+
+    The duplicate pair is gone; the workspace bullets appear once.
+
 Lines 89–92 and 96–99 are the same two bullets, once under the diagram and once under "A uv
 workspace of two packages", with only a trailing clause differing.
 
 ### 10. The repo-layout block omits the largest script
+
+!!! success "Resolved"
+
+    `harvest.py` is listed, and the Makefile table covers `harvest` and `verify-data`.
 
 `docs/development/index.md` annotates `scripts/` as "ingest_df.py, mcp_smoke.py". It also
 contains `harvest.py` — 410 lines, the single biggest file in the repository and the entry
@@ -252,24 +309,50 @@ point for the entire data pipeline. The Makefile table on the same page likewise
 
 ### 11. Smaller things
 
-- **No `LICENSE` file**, though both `pyproject.toml`s declare `license = "Apache-2.0"` and
-  the README says the code is Apache-2.0.
-- **`build_fts_index(column: str = "searchable_text")`** hardcodes the literal rather than
-  defaulting to `FTS_COLUMN`, which is defined seventy lines above and used everywhere else —
-  two sources of truth for one column name.
+- ~~**No `LICENSE` file**~~ — added.
+- ~~**Version validation covers one package**~~ — `publish.yml` now checks both.
+- ~~**Two publish paths**~~ — the unattested Dagger `PublishDocker` path was deleted.
+- ~~**`build_fts_index` hardcodes the column literal**~~ — it defaults to `FTS_COLUMN`.
+- ~~**The fuzzy-default test takes an unused fixture**~~ — dropped, saving an ingest per run.
+- ~~**`or` cited as 51 and 50**~~ — 51 is right; confirmed by ingesting the full 6,876-charter
+  corpus and running the query. The test docstring was the wrong one.
 - **`HOST`, `PORT` and `LOG_LEVEL` are unprefixed** (`env_prefix=""`), unlike the `KA_`-prefixed
   pair. An unrelated `PORT` in the environment silently retargets the server.
-- **`test_fuzzy_is_opt_in_so_stemming_keeps_working(search)`** takes the `search` fixture and
-  never uses it, paying for a full fixture ingest to assert a module constant.
 - **Version validation covers one package.** Both `publish.yml` and Dagger's `validateVersion`
   checked only `packages/kansallisarkisto-mcp/pyproject.toml`; the lib version could drift
   unnoticed. **Resolved** — `publish.yml` now validates both manifests against the tag.
-- **`or` is cited as 51 charters** in `search-tips.md` and 50 in `test_retrieval_quality.py`.
-  Trivial in isolation, but this repository argues from exact counts, so an unreconciled pair
-  costs more here than it would elsewhere.
 - **Two publish paths.** CI published via `docker/build-push-action` while Dagger's
   `PublishDocker` was never called and pushed no attestations. **Resolved** — `PublishDocker`
   is deleted; there is one publish path.
+
+### 12. A lancedb `ValueError` reached the client verbatim
+
+!!! success "Resolved"
+
+    `SearchInputError` now separates this library's own validation messages from
+    everything else, and two tests pin both halves.
+
+Found while continuing the CI work, and introduced by the fix for finding 2. Rejecting
+`fuzzy` on a quoted phrase needed the tools to return that message, which was done with a
+broad `except ValueError` in `df_tool.py`. But lancedb raises `ValueError` too, so an
+out-of-`int32` bound leaked its internals straight to the client:
+
+```
+df_search(keyword="Åbo", year_min=10**20)
+-> Error: Invalid input, Error resolving filter expression year_to >= 100000000000000000000:
+   Invalid user input: Received literal Float64(...) and could not convert to literal
+```
+
+The logged form went further and quoted a Rust source path inside the lance crate. That is
+exactly what `format_error` exists to prevent — see **What holds up** above, which had
+recorded the property as sound one commit earlier.
+
+The guards now raise `SearchInputError`, a `ValueError` subclass, and `df_tool.py` catches
+that instead of the base class. Caller-correctable messages still come through; anything
+else goes back to the generic internal-error reply with the traceback server-side.
+
+The general lesson is narrow: a bare `except ValueError` around a third-party call is a
+disclosure decision, not just a control-flow one.
 
 ---
 

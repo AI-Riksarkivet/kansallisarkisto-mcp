@@ -16,7 +16,7 @@ kansallisarkisto-mcp/
 ├── .dagger/                      # Go Dagger module (package main, receiver KansallisarkistoMcp)
 ├── .docker/                      # kansallisarkisto-mcp.dockerfile + docker-compose.yml
 ├── docs/                         # this zensical site's markdown sources
-├── scripts/                      # ingest_df.py, mcp_smoke.py
+├── scripts/                      # harvest.py, ingest_df.py, mcp_smoke.py
 ├── Makefile                      # thin wrappers over uv / dagger
 ├── pyproject.toml                # workspace root: [tool.uv.workspace], no [project] version
 └── zensical.toml                 # site config (nav, theme)
@@ -53,7 +53,7 @@ uv run pytest
 ```
 
 Runs against the local venv, needs no network, and — importantly — **needs no corpus**.
-`packages/kansallisarkisto-lib/tests/fixtures/df_sample.jsonl` holds 16 real charters chosen
+`packages/kansallisarkisto-lib/tests/fixtures/df_sample.jsonl` holds 18 real charters chosen
 to cover the corpus's documented traps: untranscribed records, unknown years, unlocated
 places, open and closed dating intervals, and all four main languages. The whole suite ingests
 that fixture into a temporary LanceDB and searches it for real, so the ingest, the index
