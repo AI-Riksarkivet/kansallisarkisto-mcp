@@ -42,8 +42,12 @@ def register_df_tools(mcp: FastMCP, get_search) -> None:
             "in Finnish. 36% of the corpus is catalogued but not transcribed; those charters are "
             "still returned and are findable by place, index term and language, and are marked as "
             "untranscribed. Results carry the DF number, which is the citable identifier — always "
-            "surface it, and pass it to df_get_charter for the full transcript. "
-            "The text is machine-recognised, so check any quotation against the source. "
+            "surface it, and pass it to df_get_charter for the full transcript. Every DF number "
+            "also resolves to https://df.kansallisarkisto.fi/document/<number>, the archives' own "
+            "edition of that charter; give the user that link when citing one. "
+            "The corpus is uneven across its range: 83% of it is 1400-1530 and barely 240 "
+            "charters predate 1300, so a thin result for an early century is the archive, not the "
+            "query. The text is machine-recognised, so check any quotation against the source. "
             'QUERY SYNTAX: several words means all of them must appear; "quote a phrase" to '
             "require the exact sequence. Do NOT write AND, OR or NOT — they are not operators "
             "here and are matched as ordinary words, so 'bref OR littera' also drags in every "
@@ -60,7 +64,12 @@ def register_df_tools(mcp: FastMCP, get_search) -> None:
                     "period spelling. Swedish stemming is applied, so 'konung' also matches 'konungen' "
                     "and 'konungs'; accents are folded, so 'Abo' matches 'Åbo'. Several words require "
                     'all of them; "quoted words" require that exact phrase. AND/OR/NOT are not '
-                    "operators and will be searched for literally."
+                    "operators and will be searched for literally. "
+                    "The catalogue fields are indexed alongside the transcript, so the Finnish index-term "
+                    "vocabulary also works here even though it has no filter of its own: 'Piispat' "
+                    "(bishops, 402), 'Kuninkaalliset' (royal, 542), 'Kaupungit' (towns, 1,171), "
+                    "'Paavi' (pope and curia, 634), 'Kirjeet' (letters, 2,215), 'Asiakirjat' "
+                    "(charters, 3,264). Combine one with a filter to narrow by kind and place at once."
                 )
             ),
         ],
@@ -72,14 +81,28 @@ def register_df_tools(mcp: FastMCP, get_search) -> None:
                 description=(
                     "Exact document language, as an UNACCENTED Finnish label: 'ruotsi' (Swedish, "
                     "3,045 charters), 'latina' (1,638), 'saksa' (German, 1,232), 'venaja' (Russian, "
-                    "89). Note 'venaja', not 'venäjä' — the accented form matches nothing."
+                    "89), 'islanti' (4), 'muu' (other, 7). Note 'venaja', not 'venäjä' — the accented "
+                    "form matches nothing. Matched exactly, with two consequences: 833 charters record "
+                    "no language at all and are excluded whenever this is set, and 28 carry a compound "
+                    "label such as 'latina, ruotsi' (15) or 'ruotsi, venaja' (3) which 'latina' alone "
+                    "does not match — search the label as a keyword to catch those."
                 )
             ),
         ] = None,
         issuingplace: Annotated[
             str | None,
             Field(
-                description="Place of issue in its historical form, matched as a case-insensitive substring: 'Åbo' (815), 'Stockholm' (687), 'Rom' (364 — the substring also catches 'Magliano Romano'). 2,314 charters record no place."
+                description=(
+                    "Place of issue, a case-insensitive substring over a vocabulary of 499 values. "
+                    "THE NAMING IS MIXED: Finnish and Swedish places keep their historical Swedish form "
+                    "— 'Åbo' (815, not Turku), 'Stockholm' (687), 'Viborg' (311, not Viipuri), "
+                    "'Nådendal' (134), 'Raseborg' (120), 'Tavastehus' (43) — but places outside that "
+                    "realm use their MODERN name: 'Tallinn' (197, NOT Reval), 'Gdansk' (37, NOT "
+                    "Danzig), 'Tartu' (5, NOT Dorpat). The historical forms of those match nothing. "
+                    "Also 'Rom' (364 — the substring also catches 'Magliano Romano'), 'Avignon' (96), "
+                    "'Uppsala' (88), 'Lübeck' (42). 2,314 charters (34%) record no place and are "
+                    "excluded whenever this is set."
+                )
             ),
         ] = None,
         country: Annotated[
@@ -170,7 +193,10 @@ def register_df_tools(mcp: FastMCP, get_search) -> None:
             "shown on every df_search hit — and return its full transcript plus dating, place of "
             "issue, language and index term. Use it after df_search to read a hit in full instead "
             "of its snippet. The transcript is machine-recognised text, so verify quotations "
-            "against the source. Example: df_get_charter(df_number=1451)."
+            "against the source: the charter's own page at "
+            "https://df.kansallisarkisto.fi/document/<number> carries the printed-edition references "
+            "(FMU, REA) and any images, and is the link to give the user. "
+            "Example: df_get_charter(df_number=1451)."
         ),
     )
     def df_get_charter(

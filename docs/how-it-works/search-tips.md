@@ -90,9 +90,24 @@ matches nothing. 27 charters carry more than one language, as compounds like `la
 `country` takes a Finnish country label as a substring: `Suomi` (2,249), `Ruotsi` (1,207),
 `Italia` (467). 2,321 charters record no country.
 
-`issuingplace` takes the historical place name as a substring: `Åbo` (815), `Stockholm`
-(687), `Rom` (364). 2,314 charters record no place. These are substring counts, which is
-what the filter does: `Rom` also matches the five charters issued at `Magliano Romano`.
+`issuingplace` takes a place name as a substring, over a vocabulary of 499 values. 2,314
+charters record no place. These are substring counts, which is what the filter does: `Rom`
+(364) also matches the five charters issued at `Magliano Romano`.
+
+**The naming is mixed, and this is the trap.** Finnish and Swedish places keep their
+historical Swedish form — `Åbo` (815, not `Turku`), `Viborg` (311, not `Viipuri`),
+`Nådendal` (134), `Raseborg` (120), `Tavastehus` (43). But places outside that realm are
+recorded under their **modern** name:
+
+| write | not | charters |
+|---|---|---:|
+| `Tallinn` | `Reval` | 197 |
+| `Gdansk` | `Danzig` | 37 |
+| `Tartu` | `Dorpat` | 5 |
+
+`Reval`, `Danzig` and `Dorpat` return nothing at all. So the "use the period form" rule
+that governs the *text* does not govern this *filter*: the text is medieval, the place
+vocabulary is a modern cataloguer's.
 
 ## Untranscribed does not mean absent
 

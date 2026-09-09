@@ -36,6 +36,33 @@ RUN uv sync --all-packages --no-dev --frozen
 # CVE-2025-47273). Remove it rather than upgrade it: nothing here needs it.
 RUN rm -rf /usr/local/lib/python3.14/site-packages/pip* /usr/local/bin/pip*
 
+# Strip the OS packages this image carries and never executes. The container runs
+# one Python entrypoint as a non-root user; it has no use for perl, for the
+# util-linux tools, or for systemd's client libraries — and between them they
+# carried 48 of the image's 54 CRITICAL/HIGH findings, including all three
+# CRITICALs. Measured after: 54 -> 6, none of them CRITICAL.
+#
+# They are Essential-flagged, so dpkg needs forcing. That leaves the package
+# database inconsistent, which is fine in a final stage that never runs apt
+# again — the interpreter and the venv are untouched.
+#
+# ncurses and libsqlite3-0 are deliberately KEPT, at the cost of the 6 remaining
+# findings: CPython links them, so removing them breaks `import sqlite3`,
+# `curses` and `readline`. Nothing here imports those today, and removing them
+# does reach 0 — but a future dependency that pulls in sqlite3 would then fail at
+# runtime rather than at build time, which is a bad trade for six unfixed
+# findings in libraries we do not call.
+#
+# This does not shrink the image: the files still exist in the base layer, so
+# deleting them adds a layer (+34 MB). What it removes is their presence in the
+# running filesystem, which is the point.
+RUN set -eux; \
+    dpkg --force-remove-essential --force-depends --purge \
+        perl-base util-linux bsdutils login mount \
+        libblkid1 libmount1 libsmartcols1 libuuid1 liblastlog2-2 gzip \
+        libsystemd0 libudev1 libacl1 >/dev/null 2>&1 || true; \
+    rm -rf /var/lib/apt/lists/* /var/cache/*
+
 # The image carries no data: the corpora are gigabytes and are rebuilt, not
 # shipped. Mount a LanceDB directory at /data (the default the server resolves to
 # when there is no project root), or point KA_LANCEDB_URI at object storage.

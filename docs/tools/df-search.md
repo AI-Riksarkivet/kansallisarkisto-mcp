@@ -15,7 +15,7 @@ entries concerning Finland, 859–1530.
 | `offset` | int ≥ 0 | `0` | Pagination start. |
 | `limit` | int 1–100 | `25` | Results per page. |
 | `language` | string | — | Exact, unaccented Finnish label: `ruotsi`, `latina`, `saksa`, `venaja`. |
-| `issuingplace` | string | — | Case-insensitive substring of the historical place name: `Åbo`, `Stockholm`, `Rom`. |
+| `issuingplace` | string | — | Case-insensitive substring of the place name. Mixed vocabulary: historical Swedish for Finland and Sweden (`Åbo`, `Viborg`), **modern** elsewhere (`Tallinn` not `Reval`, `Gdansk` not `Danzig`). |
 | `country` | string | — | Case-insensitive substring of the Finnish country label: `Suomi`, `Ruotsi`, `Italia`. |
 | `year_min` | int | — | Earliest year the charter may fall in. |
 | `year_max` | int | — | Latest year the charter may fall in. |

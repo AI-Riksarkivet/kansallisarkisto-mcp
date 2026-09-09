@@ -81,7 +81,7 @@ entries and narrative sources. The only corpus of the three with geographic coor
 | `df` | string | `df`, `df_number` | DF number — the citable charter identifier |
 | `transcript` | string | `transcript` | Transcribed text |
 | `indexterm` | string | `indexterm` | Subject classification (Finnish) |
-| `issuingplace` | string | `issuingplace` | Place of issue, historical form |
+| `issuingplace` | string | `issuingplace` | Place of issue — historical Swedish form for Finland and Sweden, modern name elsewhere |
 | `issuingplacecountry` | string | `issuingplacecountry` | Country of issue (Finnish) |
 | `language` | string | `language` | Document language (Finnish label) |
 | `dating_start_year` | int | `dating_start_year`, `year_from` | Earliest possible date |
