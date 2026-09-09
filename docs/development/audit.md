@@ -133,6 +133,12 @@ Nothing tests a docstring, and `docs/api/` is written by hand from these, so thi
 
 !!! success "Resolved"
 
+    Split into `/health` (liveness, always 200) and `/ready` (readiness, 503 when
+    the table cannot be searched), the same shape as ra-mcp — alongside a full
+    OpenTelemetry layer. See [Observability](observability.md).
+
+!!! success "Resolved"
+
     `/ready` added, returning 503 with a reason when a search would fail, and running the
     same one-row probe as the boot check rather than trusting a table listing. `/health` is
     unchanged and remains liveness — restarting the process would not conjure a table.
@@ -353,6 +359,37 @@ else goes back to the generic internal-error reply with the traceback server-sid
 
 The general lesson is narrow: a bare `except ValueError` around a third-party call is a
 disclosure decision, not just a control-flow one.
+
+### 13. OTel shutdown hung the process when no collector was reachable
+
+!!! success "Resolved"
+
+    Bounded by a daemon thread joined with a timeout, and pinned by a test.
+
+Found by running the telemetry layer rather than reading it. With
+`KA_MCP_OTEL_ENABLED=true` and nothing listening on the OTLP endpoint,
+`shutdown_telemetry()` never returned — killed at 120s, having reported `init`
+and the search itself as instant:
+
+```
+init done
+ingest done
+search: 3 hits in 0.0s
+shutdown: (never returned)
+```
+
+The OTLP gRPC exporter retries an unreachable endpoint with exponential backoff
+and `shutdown()` waits for that loop; `force_flush(timeout_millis=5000)` does not
+bound it. Because the function is registered with `atexit`, this hung the process
+on **every exit** — and for stdio, exit is after every session. So the failure mode
+was: misconfigure the collector, and the server stops exiting.
+
+The flush now runs on a daemon thread joined with `SHUTDOWN_TIMEOUT_SECONDS`;
+a daemon thread cannot keep the interpreter alive, so a dead collector costs five
+seconds and a warning. Verified: the same script now finishes in 5.0s and exits 0.
+
+This is inherited from the reference implementation's shape, so ra-mcp and the
+sibling Kansallisarkisto server likely have it too — worth a look there.
 
 ---
 

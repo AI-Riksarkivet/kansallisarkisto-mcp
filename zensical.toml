@@ -38,6 +38,7 @@ nav = [
     {"Setup" = "development/index.md"},
     {"Deployment" = "development/deployment.md"},
     {"Security" = "development/security.md"},
+    {"Observability" = "development/observability.md"},
     {"Code Audit" = "development/audit.md"},
   ]},
 ]
