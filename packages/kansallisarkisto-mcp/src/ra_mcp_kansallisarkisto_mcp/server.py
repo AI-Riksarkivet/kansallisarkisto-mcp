@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import atexit
 import logging
 import sys
 
@@ -9,6 +10,7 @@ from ra_mcp_kansallisarkisto_lib.config import DF_TABLE
 from ra_mcp_kansallisarkisto_lib.dataset import get_lancedb, table_names
 from ra_mcp_kansallisarkisto_lib.search_operations import DfSearch
 from ra_mcp_kansallisarkisto_mcp.settings import settings
+from ra_mcp_kansallisarkisto_mcp.telemetry import init_telemetry, shutdown_telemetry
 from ra_mcp_kansallisarkisto_mcp.tools import kansallisarkisto_mcp
 
 logger = logging.getLogger(__name__)
@@ -82,6 +84,13 @@ def main() -> None:
         stream=sys.stderr,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+    # Before anything that might be worth tracing, and after logging is
+    # configured so the log bridge picks up the same root logger. A no-op unless
+    # KA_MCP_OTEL_ENABLED is set. The atexit flush matters most for stdio, where
+    # the process exits at the end of every session and would otherwise drop its
+    # last batch of spans.
+    init_telemetry()
+    atexit.register(shutdown_telemetry)
     log_table_status()
     if settings.ka_mcp_transport == "http":
         # Behind a TLS-terminating proxy, uvicorn must trust X-Forwarded-Proto or it builds

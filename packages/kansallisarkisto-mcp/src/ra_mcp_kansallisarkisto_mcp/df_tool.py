@@ -20,6 +20,7 @@ from pydantic import Field
 
 from ra_mcp_kansallisarkisto_lib.config import DEFAULT_LIMIT, MAX_LIMIT
 from ra_mcp_kansallisarkisto_lib.dataset import SearchInputError, require_keyword, require_ordered_range
+from ra_mcp_kansallisarkisto_lib.telemetry import mark_span_error, record_span_exception
 from ra_mcp_kansallisarkisto_mcp.errors import MissingTableError
 from ra_mcp_kansallisarkisto_mcp.formatter import format_charter, format_error, format_search_results
 
@@ -115,9 +116,14 @@ def register_df_tools(mcp: FastMCP, get_search) -> None:
             ),
         ] = 0,
     ) -> str:
+        # Every return below is a string, not an exception — which is right for the
+        # model, but leaves FastMCP's tools/call span green on failure. mark_span_error
+        # is what keeps the tool failure rate from reading as a flat zero.
         if err := require_keyword(keyword, "'konung' or 'littera'"):
+            mark_span_error(err, "validation")
             return err
         if err := require_ordered_range(year_min, year_max, "year"):
+            mark_span_error(err, "validation")
             return err
         try:
             result = get_search().search(
@@ -135,6 +141,7 @@ def register_df_tools(mcp: FastMCP, get_search) -> None:
         except MissingTableError as exc:
             # A deployment state the operator can fix, so it is explained in full
             # rather than folded into the generic internal-error reply.
+            mark_span_error(str(exc), "missing_table")
             return str(exc)
         except SearchInputError as exc:
             # Raised only by this library's own guards — a blank keyword, a bad
@@ -143,11 +150,14 @@ def register_df_tools(mcp: FastMCP, get_search) -> None:
             # Deliberately NOT `except ValueError`: lancedb raises that too, and
             # its messages quote dataset paths and internal query structure, which
             # a broad catch would hand straight to a public HTTP client.
+            mark_span_error(str(exc), "validation")
             return f"Error: {exc}"
-        except Exception as exc:
-            # logger.exception keeps the traceback server-side; format_error
-            # deliberately does not put the message in the client's reply.
-            logger.exception("df_search failed")
+        except Exception as exc:  # noqa: BLE001 - by design: nothing raises out to the client
+            # record_span_exception, not logger.exception: the spine may already
+            # have logged this as it unwound, and the helper keeps one failure to
+            # one traceback. format_error keeps the message out of the reply.
+            record_span_exception(logger, exc)
+            mark_span_error(f"df_search failed: {type(exc).__name__}")
             return format_error(exc)
         return format_search_results(result)
 
@@ -169,8 +179,12 @@ def register_df_tools(mcp: FastMCP, get_search) -> None:
         try:
             record = get_search().get_charter(df_number)
         except MissingTableError as exc:
+            mark_span_error(str(exc), "missing_table")
             return str(exc)
-        except Exception as exc:
-            logger.exception("df_get_charter failed")
+        except Exception as exc:  # noqa: BLE001 - by design: nothing raises out to the client
+            record_span_exception(logger, exc)
+            mark_span_error(f"df_get_charter failed: {type(exc).__name__}")
             return format_error(exc)
+        # A charter that does not exist is a normal answer, not a failure — the
+        # span stays OK and the miss is recorded on the operations span instead.
         return format_charter(record, df_number)
