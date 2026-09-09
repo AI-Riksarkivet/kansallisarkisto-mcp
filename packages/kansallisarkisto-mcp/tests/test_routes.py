@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 import httpx
 import pytest
 from fastmcp import Client
 
 from ra_mcp_kansallisarkisto_mcp.tools import kansallisarkisto_mcp
+
+DF_FIXTURE = Path(__file__).parents[2] / "kansallisarkisto-lib" / "tests" / "fixtures" / "df_sample.jsonl"
 
 
 @pytest.fixture(scope="module")
@@ -77,3 +80,43 @@ def test_ready_reports_ready_once_the_table_is_searchable(client, monkeypatch, d
     response = client.get("/ready")
     assert response.status_code == 200
     assert response.json() == {"status": "ready", "table": "df"}
+
+
+def test_health_is_liveness_and_stays_ok_without_a_table(client, monkeypatch, tmp_path):
+    """Liveness must not depend on the data. The server boots without a table on
+    purpose, so a probe that failed there would restart a healthy process."""
+    from ra_mcp_kansallisarkisto_mcp import tools
+
+    monkeypatch.setattr(tools.settings, "ka_lancedb_uri", str(tmp_path / "empty"))
+    monkeypatch.setattr(tools, "_search", None)
+    r = client.get("/health")
+    assert r.status_code == 200
+    assert r.json() == {"status": "ok"}
+
+
+def test_ready_is_503_when_the_table_is_missing(client, monkeypatch, tmp_path):
+    """The gap this route closes: /health alone reported 'ok' on a server whose
+    every tool call answered with the missing-table error."""
+    from ra_mcp_kansallisarkisto_mcp import tools
+
+    monkeypatch.setattr(tools.settings, "ka_lancedb_uri", str(tmp_path / "empty"))
+    monkeypatch.setattr(tools, "_search", None)
+    r = client.get("/ready")
+    assert r.status_code == 503
+    assert r.json()["status"] == "not ready"
+    assert "df table is not available" in r.json()["reason"]
+
+
+def test_ready_is_200_once_the_table_is_there(client, monkeypatch, tmp_path):
+    import lancedb
+
+    from ra_mcp_kansallisarkisto_lib.ingest import ingest_df
+    from ra_mcp_kansallisarkisto_mcp import tools
+
+    uri = str(tmp_path / "db")
+    ingest_df(lancedb.connect(uri), DF_FIXTURE)
+    monkeypatch.setattr(tools.settings, "ka_lancedb_uri", uri)
+    monkeypatch.setattr(tools, "_search", None)
+    r = client.get("/ready")
+    assert r.status_code == 200
+    assert r.json() == {"status": "ready", "table": "df"}
