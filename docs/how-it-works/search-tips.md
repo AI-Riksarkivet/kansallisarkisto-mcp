@@ -12,16 +12,31 @@ pre-reform and unstandardised.
 | write | not | hits in `df` |
 |---|---|---:|
 | `bref` | `brev` | 257 |
-| `konung` | `kung` | 277 |
+| `konung` | `kung` | 279 |
 | `gods` | | 1,147 |
-| `Åbo` | `Turku` | 1,451 |
+| `Åbo` | `Turku` | 1,452 |
 | `Stockholm` | | 742 |
-| `biskop` | | 74 |
+| `biskop` | | 77 |
 
-And in Latin: `ecclesia` 600, `littera` 355, `dominus` 242.
+And in Latin: `ecclesia` 602, `littera` 356, `dominus` 244.
 
 Swedish stemming is applied, so `konungen` finds `konung`, `konungs` and `konungavalit`.
-Accents are folded, so `Abo` finds `Åbo`.
+Accents are folded, so `Abo` finds `Åbo`. Stop words are **kept**, unlike a normal Swedish
+index: they are Latin content words here, and removing them cost `de` 1,735 documents, `den`
+846 and `om` 1,133. Quoted phrases work — `"de ecclesia"` is narrower than `de ecclesia`.
+
+## The edition's apparatus is stripped before indexing
+
+Diplomatarium Fennicum is a scholarly edition, so its transcripts carry editorial apparatus
+inline: footnote markers fused to the word they annotate (`Hundæbæth⁶`, `Karulj²`) and
+editorial insertions in square brackets, sometimes mid-word (`Fi[n]llandh`, `eccl[esi]a`).
+A tokeniser has no reason to treat either as punctuation, so `Hundæbæth⁶` indexed as a single
+token and the plain word matched nothing — across 2,266 occurrences in 621 records, plus
+4,801 bracketed forms in another 1,969.
+
+The apparatus is now removed from the search text only. `transcript` still shows the edition
+verbatim, because the apparatus is part of what a researcher is reading — so you may well see
+a `⁶` in a result whose word you found without one.
 
 ## A zero result means the term is absent
 

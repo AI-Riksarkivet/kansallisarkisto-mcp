@@ -50,10 +50,13 @@ steps can duplicate a single slice; `--verify` (or `make verify-data`) checks th
 
 ## Provenance
 
-Harvested 29 July 2026 from `sisaltohaku.demo.kansallisarkisto.fi` via its public
-`/api/export-all` endpoint. Each corpus directory carries the harvester's `report.json`
-recording what was and was not retrieved, and `checkpoint.json` recording the slice-by-slice
-progress that made the run resumable.
+The corpora are downloaded from
+[Sisältöhaku](https://sisaltohaku.demo.kansallisarkisto.fi/), the content-search demo
+service of [Kansallisarkisto](https://kansallisarkisto.fi/), through the same public JSON
+endpoints the site's own "download results" button uses. Run `make harvest`, or
+`uv run python scripts/harvest.py --index all`. Each corpus directory gets the harvester's
+`report.json` recording what was and was not retrieved, and `checkpoint.json` recording the
+slice-by-slice progress that makes a run resumable.
 
 Coverage is **98.25%** of the live index (7,941,378 of 8,082,496). The gap is systematic, not
 random: Elasticsearch enforces a 10,000-document `from + size` ceiling per query and the
@@ -62,9 +65,10 @@ their surplus is unreachable by this route — 128,297 of them from the Vyborg t
 archive alone. The documented Elasticsearch API at `es.demo.kansallisarkisto.fi` has no such
 ceiling; with an API key those records are retrievable.
 
-**These are snapshots.** Anything Kansallisarkisto has added, corrected or re-OCR'd since
-29 July 2026 is absent, and nothing here signals that drift. The live service is the
-authority.
+**A harvest is a snapshot, and the index moves.** Between two harvests `voudintilit` went
+from 99,031 to 99,125 documents. Nothing in a harvested file signals that drift, so anything
+Kansallisarkisto has added, corrected or re-recognised since the run is simply absent. Re-run
+the harvester when currency matters; the live service is always the authority.
 
 ## `df` — Diplomatarium Fennicum
 
@@ -114,6 +118,26 @@ rather than inferred, since a batch of entirely-unlocated charters would infer a
 column and fail to merge with a later float batch. And the `file_id` field, which the other
 two corpora carry, is a zero-padded string in `voudintilit` and an integer in `tuomiokirjat`
 — another reason the schema is pinned per corpus.
+
+## Can everything be found?
+
+Every record in the corpus was swept: take a distinctive word from each charter's own
+indexable text and check the charter comes back. The answer, after three fixes it prompted,
+is **all but four of 6,876** — and those four carry no transcript, place, index term or
+language at all, so there is nothing for any index to hold. They remain reachable by DF
+number through `df_get_charter`, and `test_retrieval_quality.py` pins that.
+
+The sweep found three ways documents had been silently unfindable:
+
+| what | scale | fix |
+|---|---|---|
+| Words fused to footnote superscripts (`Hundæbæth⁶`) or split by editorial brackets (`eccl[esi]a`) | 2,266 occurrences in 621 records; 4,801 in 1,969 | apparatus stripped from the search text, kept in `transcript` |
+| `de`, `den`, `om` returned nothing — a Swedish analyser had removed them as stop words, though they are Latin content words | tokens in 1,735 / 846 / 1,133 documents | stop-word removal turned off for this corpus |
+| Quoted phrase queries **raised** instead of searching, so the MCP layer reported an internal error | every phrase query | positions added to the index |
+
+Recovering the fused words moved the verified reference counts slightly upward — `konung`
+277 → 279, `ecclesia` 600 → 602 — which is what recovered recall looks like. `DF 3453`, for
+instance, reads `eccl[esi]a` in the source and was previously unreachable by `ecclesia`.
 
 ## Choosing an analyzer
 
