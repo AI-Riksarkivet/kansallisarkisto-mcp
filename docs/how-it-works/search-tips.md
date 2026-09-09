@@ -69,6 +69,11 @@ A fuzzy term skips the analysis pipeline, so it is matched raw against stemmed i
 default, and when a search looks thin the right second attempt is `fuzzy=1` **on a base
 form** — `konung`, not `konungen`.
 
+## The DF number is searchable
+
+`DF 1451` — or just `1451` — finds that charter. This is also what makes the four charters
+with no transcript, place, index term or language reachable at all.
+
 ## A zero result means the term is absent
 
 `kirkko` — the Finnish for "church" — appears in **zero** of the 6,876 charters. That is not

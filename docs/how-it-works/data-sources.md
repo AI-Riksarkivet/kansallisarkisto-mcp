@@ -122,12 +122,15 @@ two corpora carry, is a zero-padded string in `voudintilit` and an integer in `t
 ## Can everything be found?
 
 Every record in the corpus was swept: take a distinctive word from each charter's own
-indexable text and check the charter comes back. The answer, after three fixes it prompted,
-is **all but four of 6,876** — and those four carry no transcript, place, index term or
-language at all, so there is nothing for any index to hold. They remain reachable by DF
-number through `df_get_charter`, and `test_retrieval_quality.py` pins that.
+indexable text and check the charter comes back. The answer, after the fixes it prompted, is
+**all 6,876**.
 
-The sweep found three ways documents had been silently unfindable:
+Four charters carry no transcript, place, index term or language at all, so there was
+nothing for any index to hold and no keyword could reach them. The citation is now part of
+the search text — written as `df <number>`, so the way a researcher actually types it, `DF
+18`, matches — which closes the gap without changing any content-query count.
+
+The sweep found three further ways documents had been silently unfindable:
 
 | what | scale | fix |
 |---|---|---|
