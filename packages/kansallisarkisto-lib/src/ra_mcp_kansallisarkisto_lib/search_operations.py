@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from .config import DEFAULT_LIMIT, DF_TABLE
-from .dataset import FTS_COLUMN, SearchResult, at_least, at_most, combine, equals, lancedb_fts_search, text_contains
+from .dataset import DEFAULT_FUZZINESS, FTS_COLUMN, SearchResult, at_least, at_most, combine, equals, lancedb_fts_search, text_contains
 
 if TYPE_CHECKING:
     import lancedb
@@ -32,6 +32,7 @@ class DfSearch:
         year_min: int | None = None,
         year_max: int | None = None,
         match_all: bool = True,
+        fuzzy: int = DEFAULT_FUZZINESS,
     ) -> SearchResult:
         """Search the df table, optionally narrowed by catalogue metadata.
 
@@ -59,6 +60,9 @@ class DfSearch:
             match_all: Require every word of the keyword (the default). False
                 widens to any word, which helps when a term may be spelled
                 differently but makes the total far less meaningful.
+            fuzzy: Edit distance allowed per term (default 1). Historical
+                spelling is unstandardised, so exact matching finds one scribe's
+                spelling and misses the rest. Pass 0 for an exact count.
 
         Returns:
             SearchResult with matching records.
@@ -73,7 +77,7 @@ class DfSearch:
             at_least("year_to", year_min) if year_min is not None else None,
             at_most("year_from", year_max) if year_max is not None else None,
         )
-        return lancedb_fts_search(self._db, self._table_name, keyword, limit=limit, offset=offset, where=where, match_all=match_all)
+        return lancedb_fts_search(self._db, self._table_name, keyword, limit=limit, offset=offset, where=where, match_all=match_all, fuzzy=fuzzy)
 
     def get_charter(self, df_number: str | int) -> dict[str, Any] | None:
         """Return one charter by its DF number, or ``None`` if there is no such charter.

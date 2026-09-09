@@ -17,7 +17,7 @@ from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any
 
 from lancedb.index import FTS, Bitmap, BTree
-from lancedb.query import MatchQuery
+from lancedb.query import FullTextOperator, MatchQuery
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
@@ -36,6 +36,24 @@ MAX_TOTAL_COUNT = 10_000
 # already carries, so returning it doubles the payload of every result for no
 # information — searches project it away by default.
 FTS_COLUMN = "searchable_text"
+
+# Edit distance allowed per term, and it is off by default because the engine
+# makes fuzzy matching and stemming mutually exclusive.
+#
+# Both address real recall problems in this corpus and neither subsumes the
+# other. Stemming handles inflection: "konungen" finds all 279 charters that
+# stem to "konung". Fuzzy handles orthography, which is the bigger problem here
+# — spelling was not standardised, so "bref" matches 257 charters while "breff"
+# matches 1,918 and only 71 overlap; one edit takes "bref" to 2,212 charters
+# with 96.9% of them still containing a real variant.
+#
+# But a fuzzy term skips the analysis pipeline, so it is matched raw against
+# stemmed index terms: "konungen" collapses from 279 hits to 6, and a word that
+# only matched via its stem disappears outright. Trading a reliable mechanism
+# for an unreliable one is the wrong default, so exact-plus-stemming wins and
+# fuzzy is an explicit widening — best used on a base form rather than an
+# inflected one.
+DEFAULT_FUZZINESS = 0
 
 _connections: dict[str, lancedb.DBConnection] = {}
 _connections_lock = threading.Lock()
@@ -184,6 +202,7 @@ def lancedb_fts_search(
     where: str | None = None,
     columns: Sequence[str] | None = None,
     match_all: bool = True,
+    fuzzy: int = DEFAULT_FUZZINESS,
 ) -> SearchResult:
     """Full-text search returning one correctly-paginated page and a true total.
 
@@ -213,6 +232,10 @@ def lancedb_fts_search(
     Requiring every term gives 77, which is the number that was actually meant.
     Pass ``match_all=False`` to widen when a term may be spelled differently.
 
+    ``fuzzy`` is the edit distance allowed per term; see :data:`DEFAULT_FUZZINESS`
+    for why it defaults to 1 rather than 0. Pass 0 for exact matching when the
+    spelling is known and the count has to be exact.
+
     Raises:
         ValueError: if ``keyword`` is blank, ``offset`` is negative or ``limit`` < 1.
     """
@@ -234,10 +257,9 @@ def lancedb_fts_search(
     # MatchQuery so that match_all can be honoured — the parser has no AND.
     if '"' in keyword:
         request: Any = keyword
-    elif match_all:
-        request = MatchQuery(keyword, column=FTS_COLUMN, operator="AND")
     else:
-        request = keyword
+        operator = FullTextOperator.AND if match_all else FullTextOperator.OR
+        request = MatchQuery(keyword, column=FTS_COLUMN, operator=operator, fuzziness=fuzzy)
     query: Any = table.search(request, query_type="fts")
     if columns is None:
         columns = [name for name in table.schema.names if name != FTS_COLUMN]
