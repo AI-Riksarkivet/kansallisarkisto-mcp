@@ -6,7 +6,7 @@ icon: lucide/rocket
 
 ## The image
 
-`.docker/kansallisarkisto-mcp.dockerfile` builds a digest-pinned `python:3.13-slim` image
+`.docker/kansallisarkisto-mcp.dockerfile` builds a digest-pinned `python:3.14-slim` image
 that serves streamable HTTP on `:8000` as `USER 1000`.
 
 It carries **no data**. The corpora are gigabytes, they are derived by a documented ingest,

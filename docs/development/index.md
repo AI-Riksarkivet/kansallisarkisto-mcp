@@ -71,7 +71,7 @@ every function with `dagger functions`.
 - **`dagger call checks`** — `ruff format`, `ruff check --fix`, then verifies both plus
   `ty check` pass, then `pip-audit --strict --desc` as a dependency-vulnerability gate. See
   [Security](security.md).
-- **`dagger call test`** — a fresh `python:3.13-slim` container running `pytest --tb=short -q`,
+- **`dagger call test`** — a fresh `python:3.14-slim` container running `pytest --tb=short -q`,
   independent of the local venv.
 - **`dagger call test-server`** — builds the production image, starts it as a service and
   curls `/health`, which must answer 200.

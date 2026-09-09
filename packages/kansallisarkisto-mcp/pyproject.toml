@@ -2,7 +2,7 @@
 name = "ra-mcp-kansallisarkisto-mcp"
 version = "0.1.0"
 description = "MCP server over the Kansallisarkisto Sisältöhaku corpora (LanceDB full-text search)"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 license = "Apache-2.0"
 dependencies = [
     "ra-mcp-kansallisarkisto-lib",

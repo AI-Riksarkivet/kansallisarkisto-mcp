@@ -72,7 +72,7 @@ slsa-verifier verify-image docker.io/riksarkivet/kansallisarkisto-mcp@<digest> \
 
 ## Base image, digest-pinned
 
-`.docker/kansallisarkisto-mcp.dockerfile` builds on `python:3.13-slim` (Debian, glibc).
+`.docker/kansallisarkisto-mcp.dockerfile` builds on `python:3.14-slim` (Debian, glibc).
 
 **This is forced, not chosen.** The obvious posture for a small scan surface is Alpine.
 It is not available here: `lancedb` is a Rust extension published as
@@ -92,14 +92,14 @@ None of it is actionable from the Dockerfile — there is no patched Debian vers
 That is precisely the package set an Alpine base avoids, and it is the price of the wheels.
 The image is also ~880 MB rather than a few hundred.
 
-What is gained in exchange: `python:3.13-slim` is the same base the CI test container and
+What is gained in exchange: `python:3.14-slim` is the same base the CI test container and
 the Dagger dev container use, so the published image runs on the same libc the tests ran
 on — the alternative would have been testing on glibc and shipping on musl.
 
 Both bases are pinned by digest, not just tag:
 
 ```dockerfile
-FROM python:3.13-slim@sha256:9d2e5553305c7c7b0097999bb17187c69b921ccd6bc9d40e4bb5ebe652c00285
+FROM python:3.14-slim@sha256:cad9a2c871761c413caa6fdd6441c783451e740a48aaeba60ae62a8b53525ef6
 
 COPY --from=ghcr.io/astral-sh/uv:0.12.5@sha256:db2d5999728c5837e1bf9ba278ee6b05cef1e95e82a20e27b0c915cb4478b9d7 /uv /uvx /bin/
 ```

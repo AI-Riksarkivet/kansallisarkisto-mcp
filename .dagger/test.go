@@ -13,7 +13,7 @@ func (m *KansallisarkistoMcp) Test(
 	// +optional
 	source *dagger.Directory,
 	// Base image to use
-	// +default="python:3.13-slim"
+	// +default="python:3.14-slim"
 	baseImage string,
 ) (string, error) {
 	if source == nil {

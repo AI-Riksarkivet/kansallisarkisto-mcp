@@ -8,7 +8,7 @@ import (
 
 // testAndBuild runs tests and builds the container if tests pass
 func (m *KansallisarkistoMcp) testAndBuild(ctx context.Context, source *dagger.Directory, operation string) (*dagger.Container, error) {
-	_, err := m.Test(ctx, source, "python:3.13-slim")
+	_, err := m.Test(ctx, source, "python:3.14-slim")
 	if err != nil {
 		return nil, fmt.Errorf("tests failed, aborting %s: %w", operation, err)
 	}

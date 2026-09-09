@@ -38,7 +38,7 @@ func (m *KansallisarkistoMcp) withUv(container *dagger.Container) *dagger.Contai
 // buildWithUv creates a development container with uv tooling and all workspace packages
 func (m *KansallisarkistoMcp) buildWithUv(ctx context.Context, source *dagger.Directory) (*dagger.Container, error) {
 	container := dag.Container().
-		From("python:3.13-slim").
+		From("python:3.14-slim").
 		WithDirectory("/app", source).
 		WithWorkdir("/app")
 
@@ -54,7 +54,7 @@ func (m *KansallisarkistoMcp) buildWithUv(ctx context.Context, source *dagger.Di
 // packages/kansallisarkisto-mcp/pyproject.toml and uv must run from that directory.
 func (m *KansallisarkistoMcp) getVersion(ctx context.Context, source *dagger.Directory) (string, error) {
 	container := dag.Container().
-		From("python:3.13-slim").
+		From("python:3.14-slim").
 		WithDirectory("/app", source).
 		WithWorkdir("/app/packages/kansallisarkisto-mcp")
 
