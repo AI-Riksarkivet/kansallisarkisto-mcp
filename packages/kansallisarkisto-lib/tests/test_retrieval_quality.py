@@ -208,3 +208,24 @@ def test_a_quoted_phrase_still_works_with_match_all(search):
     """Quoted input goes to the query parser rather than the AND matcher —
     routing it through the matcher turned '"de ecclesia"' into 496 hits."""
     assert search.search('"de ecclesia"').total_hits == search.search('"de ecclesia"', match_all=False).total_hits
+
+
+# --- spelling variation, the corpus's largest recall problem ------------------
+
+
+def test_fuzzy_is_opt_in_so_stemming_keeps_working(search):
+    """The engine makes fuzzy and stemming mutually exclusive: a fuzzy term skips
+    the analysis pipeline and is matched raw against stemmed index terms. On the
+    full corpus "konungen" collapses from 279 hits to 6 with fuzzy=1, which is
+    why exact-plus-stemming is the default and fuzzy is an explicit widening."""
+    from ra_mcp_kansallisarkisto_lib.dataset import DEFAULT_FUZZINESS
+
+    assert DEFAULT_FUZZINESS == 0
+
+
+def test_fuzzy_widens_to_spelling_variants(search):
+    """Orthography is unstandardised, so one spelling finds one scribe. On the
+    full corpus this is the difference between 257 and 2,212 charters."""
+    exact = search.search("kirkia", fuzzy=0).total_hits
+    widened = search.search("kirkia", fuzzy=1).total_hits
+    assert widened >= exact
