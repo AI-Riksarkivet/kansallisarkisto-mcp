@@ -168,9 +168,37 @@ Python version too.
 
 The trade is worth revisiting if the reproducibility guarantee is relaxed, if a paid
 Chainguard tier becomes available, or if another digest-stable minimal glibc base appears.
-Two other options were measured and rejected outright: `gcr.io/distroless/python3-debian12`
-is *worse* (48 findings, 19 of them fixable — an older Debian 12), and `python:3.14-alpine`
-scores 9 but cannot run `lancedb` at all.
+
+Three other bases were measured:
+
+| base | CRITICAL/HIGH | fixable | Python | digest-stable | verdict |
+|---|---:|---:|---|---|---|
+| `python:3.14-slim` (current) | 54 | 0 | 3.14.6 | yes | in use |
+| Wolfi, multi-stage | **0** | 0 | 3.14.7 | **no** | deferred, see above |
+| `gcr.io/distroless/python3-debian13` | 22 | 0 | **3.13.5** | yes | needs reverting the 3.14 bump |
+| `gcr.io/distroless/python3-debian12` | 48 | 19 | 3.11 | yes | worse, and older |
+
+`python3-debian13` is the interesting near-miss: less than half the findings, none of them
+fixable either, and Google keeps its digests, so the reproducibility guarantee survives. It
+loses on the interpreter — Debian 13 ships Python 3.13, and both packages require >= 3.14.
+Reverting that bump to gain 32 unfixed, unreachable findings is not obviously worth it, but
+it is the option to reach for if the Wolfi digest problem stays unsolved.
+
+`python:3.14-alpine` is not a trade-off, it is impossible. `lancedb` publishes exactly four
+files — macOS arm64, manylinux aarch64, manylinux x86_64, Windows — with **no musllinux wheel
+and no sdist**, so on musl `uv` can neither install it nor fall back to building it. Only a
+musllinux wheel or an sdist from upstream changes that; `pyarrow`, by contrast, ships six.
+
+### These findings are noise, not exposure
+
+Worth stating plainly before anyone spends a week on this: all 54 are unfixed, and none is
+reachable. They live in `perl-base`, `util-linux`, `ncurses` and `gzip` — packages the image
+carries but never executes. The container runs one Python entrypoint as `USER 1000`, and the
+release path is gated on *fixable* findings only.
+
+So the case for a smaller base is signal-to-noise and attack surface, not exploitable risk:
+a Security tab showing 0 makes a real finding visible, where one showing 100 hides it. That
+is a real benefit, and it is a different benefit from the one the raw number suggests.
 
 ## Non-root runtime
 
