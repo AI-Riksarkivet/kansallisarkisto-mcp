@@ -19,7 +19,7 @@ from fastmcp import FastMCP
 from pydantic import Field
 
 from ra_mcp_kansallisarkisto_lib.config import DEFAULT_LIMIT, MAX_LIMIT
-from ra_mcp_kansallisarkisto_lib.dataset import require_keyword, require_ordered_range
+from ra_mcp_kansallisarkisto_lib.dataset import SearchInputError, require_keyword, require_ordered_range
 from ra_mcp_kansallisarkisto_mcp.errors import MissingTableError
 from ra_mcp_kansallisarkisto_mcp.formatter import format_charter, format_error, format_search_results
 
@@ -105,7 +105,8 @@ def register_df_tools(mcp: FastMCP, get_search) -> None:
                     "'bref' matches 257 charters, 'breff' matches 1,918, and only 71 overlap. "
                     "fuzzy=1 takes 'bref' to 2,212 and is the right second attempt when a search "
                     "looks thin. It is not the default because a fuzzy term skips stemming, so pass "
-                    "a base form ('konung', not 'konungen' — which collapses from 279 hits to 6)."
+                    "a base form ('konung', not 'konungen' — which collapses from 279 hits to 6). "
+                    'Cannot be combined with a "quoted phrase".'
                 ),
                 ge=0,
                 le=2,
@@ -133,6 +134,14 @@ def register_df_tools(mcp: FastMCP, get_search) -> None:
             # A deployment state the operator can fix, so it is explained in full
             # rather than folded into the generic internal-error reply.
             return str(exc)
+        except SearchInputError as exc:
+            # Raised only by this library's own guards — a blank keyword, a bad
+            # page, fuzzy on a quoted phrase — so the message is written for the
+            # caller and deserves its sentence, not "an internal ValueError".
+            # Deliberately NOT `except ValueError`: lancedb raises that too, and
+            # its messages quote dataset paths and internal query structure, which
+            # a broad catch would hand straight to a public HTTP client.
+            return f"Error: {exc}"
         except Exception as exc:
             # logger.exception keeps the traceback server-side; format_error
             # deliberately does not put the message in the client's reply.
