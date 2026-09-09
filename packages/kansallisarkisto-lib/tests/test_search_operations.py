@@ -72,13 +72,14 @@ def test_language_filter(search):
 
 
 def test_issuingplace_filter_is_case_insensitive(search):
-    result = search.search("brev OR bref OR Åbo", limit=100, issuingplace="åbo")
+    result = search.search("Åbo", limit=100, issuingplace="åbo")
     assert result.records
     assert all(rec["issuingplace"] == "Åbo" for rec in result.records)
 
 
 def test_country_filter(search):
-    result = search.search("Åbo OR Perugia OR Lateranen", limit=100, country="Italia")
+    # match_all=False because these are alternatives, not co-occurring terms.
+    result = search.search("Perugia Lateranen", limit=100, country="Italia", match_all=False)
     assert result.records
     assert all(rec["issuingplacecountry"] == "Italia" for rec in result.records)
 

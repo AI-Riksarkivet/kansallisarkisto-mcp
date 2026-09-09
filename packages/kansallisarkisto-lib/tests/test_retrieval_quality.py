@@ -174,3 +174,37 @@ def test_full_corpus_reachability_is_understood():
     empty = [r.df for r in records if not r.searchable_text.strip()]
     assert len(records) >= 6876
     assert len(empty) <= 4, f"more records became unindexable: {empty}"
+
+
+# --- what a multi-word query means -------------------------------------------
+
+
+def test_several_words_require_all_of_them(search):
+    """The engine's default is OR, which made the total a claim nobody meant:
+    "konung Stockholm" matched 944 charters corpus-wide, nearly all on one word."""
+    both = search.search("Åbo latina")
+    either = search.search("Åbo latina", match_all=False)
+    assert both.total_hits < either.total_hits
+    for record in both.records:
+        assert record["language"] == "latina"
+
+
+def test_match_all_false_widens(search):
+    narrow = search.search("Perugia Lateranen").total_hits
+    wide = search.search("Perugia Lateranen", match_all=False).total_hits
+    assert wide > narrow
+
+
+@pytest.mark.parametrize("operator", ["OR", "AND", "NOT"])
+def test_boolean_words_are_not_operators(search, operator):
+    """They are matched as ordinary words, so the tool descriptions must never
+    suggest them: writing "OR" once pulled in 50 charters containing "or"."""
+    plain = search.search("Åbo Suomi", match_all=False).total_hits
+    with_word = search.search(f"Åbo {operator} Suomi", match_all=False).total_hits
+    assert with_word >= plain, "if this ever behaves as an operator, revisit the tool guidance"
+
+
+def test_a_quoted_phrase_still_works_with_match_all(search):
+    """Quoted input goes to the query parser rather than the AND matcher —
+    routing it through the matcher turned '"de ecclesia"' into 496 hits."""
+    assert search.search('"de ecclesia"').total_hits == search.search('"de ecclesia"', match_all=False).total_hits
