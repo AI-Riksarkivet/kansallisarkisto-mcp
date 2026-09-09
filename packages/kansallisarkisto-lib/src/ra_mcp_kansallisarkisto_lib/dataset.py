@@ -13,12 +13,16 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any
 
 from lancedb.index import FTS, Bitmap, BTree
 from lancedb.query import FullTextOperator, MatchQuery
+from opentelemetry.trace import SpanKind, StatusCode
 from pydantic import BaseModel
+
+from .telemetry import get_meter, get_tracer, record_span_exception
 
 if TYPE_CHECKING:
     import lancedb
@@ -68,6 +72,19 @@ class SearchInputError(ValueError):
     exactly what ``formatter.format_error`` exists to prevent.
     """
 
+
+_tracer = get_tracer("kansallisarkisto.lancedb")
+_meter = get_meter("kansallisarkisto.lancedb")
+# RED metrics on the busiest surface: every corpus search passes through here.
+# Attempts are counted whether they succeed or fail, so an error-rate panel and a
+# latency percentile both work — a success-only counter gives neither.
+_query_counter = _meter.create_counter("kansallisarkisto.lancedb.queries", unit="{query}", description="LanceDB full-text search queries attempted")
+_error_counter = _meter.create_counter("kansallisarkisto.lancedb.errors", unit="{error}", description="LanceDB full-text search failures")
+_query_duration = _meter.create_histogram("kansallisarkisto.lancedb.query.duration", unit="s", description="LanceDB full-text search duration")
+# Behavioural signal rather than a health one: the zero bucket is "searches that
+# matched nothing" — what people looked for that this corpus cannot answer. The
+# terms themselves stay on the span (db.query.text), not on the metric.
+_results_histogram = _meter.create_histogram("kansallisarkisto.lancedb.results", unit="{hit}", description="Total matches per LanceDB search")
 
 _connections: dict[str, lancedb.DBConnection] = {}
 _connections_lock = threading.Lock()
@@ -297,9 +314,33 @@ def lancedb_fts_search(
     # search of unindexed rows with no loss of results.
     query = query.fast_search()
 
-    matches = query.limit(MAX_TOTAL_COUNT).to_list()
-    total = len(matches)
-    page = matches[offset : offset + limit]
+    # The span covers the query itself, not the predicate building above: this is
+    # the part that does I/O and the part that can be slow.
+    attrs = {"db.system": "lancedb", "db.collection.name": table_name}
+    span_attrs: dict[str, Any] = {**attrs, "db.operation.name": "fts_search", "db.query.text": keyword, "db.query.match_all": match_all, "db.query.fuzzy": fuzzy}
+    if where:
+        span_attrs["db.query.filter"] = where
+    with _tracer.start_as_current_span(f"search {table_name}", kind=SpanKind.CLIENT, attributes=span_attrs) as span:
+        start = time.perf_counter()
+        try:
+            matches = query.limit(MAX_TOTAL_COUNT).to_list()
+        except Exception as exc:
+            span.set_status(StatusCode.ERROR, f"{type(exc).__name__}: {exc}")
+            record_span_exception(logger, exc)  # also sets error.type on the span
+            _error_counter.add(1, {**attrs, "error.type": type(exc).__name__})
+            raise
+        finally:
+            _query_duration.record(time.perf_counter() - start, attrs)
+            _query_counter.add(1, attrs)
+
+        total = len(matches)
+        page = matches[offset : offset + limit]
+        # total answers "how well did the corpus answer this", returned_rows "what
+        # did the caller actually get" — they diverge on every paginated search.
+        span.set_attribute("db.response.total_hits", total)
+        span.set_attribute("db.response.returned_rows", len(page))
+        span.set_attribute("db.response.total_is_capped", total >= MAX_TOTAL_COUNT)
+        _results_histogram.record(total, attrs)
 
     return SearchResult(
         records=page,

@@ -6,11 +6,18 @@ from typing import TYPE_CHECKING, Any
 
 from .config import DEFAULT_LIMIT, DF_TABLE
 from .dataset import DEFAULT_FUZZINESS, FTS_COLUMN, SearchResult, at_least, at_most, combine, equals, lancedb_fts_search, text_contains
+from .telemetry import get_tracer
 
 if TYPE_CHECKING:
     import lancedb
 
 __all__ = ["DfSearch", "SearchResult"]
+
+# The operations layer: one span per public method, nesting the spine's `search df`
+# span underneath. It is the layer that knows *what was asked* (which filters, in
+# the caller's terms) as opposed to *what was run* (a SQL predicate), so the
+# filter-shaped attributes belong here rather than on the query span.
+_tracer = get_tracer("kansallisarkisto.df.operations")
 
 
 class DfSearch:
@@ -72,14 +79,29 @@ class DfSearch:
         Raises:
             ValueError: If keyword is empty, offset is negative or limit < 1.
         """
-        where = combine(
-            equals("language", language) if language else None,
-            text_contains("issuingplace", issuingplace) if issuingplace else None,
-            text_contains("issuingplacecountry", country) if country else None,
-            at_least("year_to", year_min) if year_min is not None else None,
-            at_most("year_from", year_max) if year_max is not None else None,
-        )
-        return lancedb_fts_search(self._db, self._table_name, keyword, limit=limit, offset=offset, where=where, match_all=match_all, fuzzy=fuzzy)
+        # Only filters the caller actually set are recorded: an attribute set to
+        # None on every unfiltered search is noise that costs storage per span.
+        attributes = {
+            "df.keyword": keyword,
+            "df.limit": limit,
+            "df.offset": offset,
+            "df.match_all": match_all,
+            "df.fuzzy": fuzzy,
+            **({"df.language": language} if language else {}),
+            **({"df.issuingplace": issuingplace} if issuingplace else {}),
+            **({"df.country": country} if country else {}),
+            **({"df.year_min": year_min} if year_min is not None else {}),
+            **({"df.year_max": year_max} if year_max is not None else {}),
+        }
+        with _tracer.start_as_current_span("DfSearch.search", attributes=attributes):
+            where = combine(
+                equals("language", language) if language else None,
+                text_contains("issuingplace", issuingplace) if issuingplace else None,
+                text_contains("issuingplacecountry", country) if country else None,
+                at_least("year_to", year_min) if year_min is not None else None,
+                at_most("year_from", year_max) if year_max is not None else None,
+            )
+            return lancedb_fts_search(self._db, self._table_name, keyword, limit=limit, offset=offset, where=where, match_all=match_all, fuzzy=fuzzy)
 
     def get_charter(self, df_number: str | int) -> dict[str, Any] | None:
         """Return one charter by its DF number, or ``None`` if there is no such charter.
@@ -91,17 +113,23 @@ class DfSearch:
         Projects out the same full-text column ``search`` does, so a record dict
         has the same shape whichever way the caller obtained it.
         """
-        try:
-            number = int(df_number)
-        except (TypeError, ValueError):
-            return None
-        # df_number is an int32 column: a value outside its range cannot be a
-        # charter, and letting the predicate fail turns an ordinary out-of-range
-        # lookup into "the search failed with an internal ValueError".
-        if not -(2**31) <= number < 2**31:
-            return None
+        with _tracer.start_as_current_span("DfSearch.get_charter", attributes={"df.number": str(df_number)}) as span:
+            try:
+                number = int(df_number)
+            except (TypeError, ValueError):
+                span.set_attribute("df.found", False)
+                return None
+            # df_number is an int32 column: a value outside its range cannot be a
+            # charter, and letting the predicate fail turns an ordinary out-of-range
+            # lookup into "the search failed with an internal ValueError".
+            if not -(2**31) <= number < 2**31:
+                span.set_attribute("df.found", False)
+                return None
 
-        table = self._db.open_table(self._table_name)
-        columns = [name for name in table.schema.names if name != FTS_COLUMN]
-        rows = table.search().where(equals("df_number", number)).select(columns).limit(1).to_list()
-        return rows[0] if rows else None
+            table = self._db.open_table(self._table_name)
+            columns = [name for name in table.schema.names if name != FTS_COLUMN]
+            rows = table.search().where(equals("df_number", number)).select(columns).limit(1).to_list()
+            # A miss is a normal answer, not an error — but it is the thing worth
+            # counting when models cite DF numbers that do not exist.
+            span.set_attribute("df.found", bool(rows))
+            return rows[0] if rows else None
