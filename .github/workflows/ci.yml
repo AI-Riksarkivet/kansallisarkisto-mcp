@@ -30,3 +30,16 @@ jobs:
           args: test
           cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
           version: "latest"
+
+      # The only place the index configuration is verified end to end: Swedish
+      # stemming and accent folding are index-time settings, so a wrong FTS
+      # config is invisible to anything that searches only exact forms. Builds
+      # the production image, ingests the test fixture into a mounted LanceDB
+      # table and drives it with a real MCP client.
+      - name: Run end-to-end MCP smoke test
+        uses: dagger/dagger-for-github@27b130bf0f79a7f6fbbbe0fbca6760dc9bb40a77 # v8.4.1
+        with:
+          verb: call
+          args: test-mcp
+          cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
+          version: "latest"
