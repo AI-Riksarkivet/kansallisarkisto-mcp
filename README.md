@@ -10,6 +10,13 @@ pinned: false
 
 # kansallisarkisto-mcp
 
+[![Tests](https://github.com/AI-Riksarkivet/kansallisarkisto-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/AI-Riksarkivet/kansallisarkisto-mcp/actions/workflows/ci.yml)
+[![Security](https://github.com/AI-Riksarkivet/kansallisarkisto-mcp/actions/workflows/security.yml/badge.svg)](https://github.com/AI-Riksarkivet/kansallisarkisto-mcp/actions/workflows/security.yml)
+[![Documentation](https://github.com/AI-Riksarkivet/kansallisarkisto-mcp/actions/workflows/docs.yml/badge.svg)](https://ai-riksarkivet.github.io/kansallisarkisto-mcp/)
+[![Python 3.14](https://img.shields.io/badge/python-3.14-blue.svg)](.python-version)
+[![License Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Data: Kansallisarkisto](https://img.shields.io/badge/data-Kansallisarkisto-8A2BE2.svg)](https://sisaltohaku.demo.kansallisarkisto.fi/)
+
 MCP server over the **Sisältöhaku** corpora of Kansallisarkisto, the National Archives of
 Finland — full-text search across machine-transcribed archival text, served from LanceDB.
 
