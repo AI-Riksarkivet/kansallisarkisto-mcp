@@ -53,9 +53,10 @@ RUN rm -rf /usr/local/lib/python3.14/site-packages/pip* /usr/local/bin/pip*
 # runtime rather than at build time, which is a bad trade for six unfixed
 # findings in libraries we do not call.
 #
-# This does not shrink the image: the files still exist in the base layer, so
-# deleting them adds a layer (+34 MB). What it removes is their presence in the
-# running filesystem, which is the point.
+# This does not shrink the image — the files remain in the base layer and the
+# deletion is a new layer on top, so the total grows slightly (measured: +1 MB).
+# What it removes is their presence in the running container's filesystem, which
+# is where reachability is decided, and is the point.
 RUN set -eux; \
     dpkg --force-remove-essential --force-depends --purge \
         perl-base util-linux bsdutils login mount \

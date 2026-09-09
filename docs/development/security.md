@@ -31,22 +31,18 @@ results always reflect the current Dockerfile and lockfile:
 
 ## What the Security tab shows, and why it is not an emergency
 
-Now that the repository is public, `security.yml` uploads the full Trivy report to
-GitHub's code-scanning dashboard — every severity, not just the gate's CRITICAL/HIGH.
-Expect roughly a hundred open alerts, and expect **none of them to have a fix**.
+`security.yml` uploads the **full** Trivy report to GitHub's code-scanning dashboard — every
+severity, not just the gate's CRITICAL/HIGH — so the alert count there is larger than the six
+above and will stay that way. All of it is the base image; **zero are Python packages**.
 
-They are the Debian base image's standing CVE set: `perl-base`, `util-linux` and its
-libraries, `ncurses`, `gzip`, `libsqlite3-0`, `libsystemd0`. Zero are Python packages —
-the dependency surface this project controls is clean, and `pip-audit` gates that
-separately in `dagger call checks`.
+So the dashboard is a **report**, not a queue. The thing that gates a release is `scan-ci`,
+which runs with `--ignore-unfixed` and therefore fails only on findings a rebuild or a
+dependency bump can actually clear. An alert with a fixed version available is the signal
+worth acting on. The standing remainder is not, and no amount of triage closes it until
+Debian ships patches — which is exactly why the packages that could be removed were removed
+instead.
 
-So the dashboard is a **report**, not a queue. The thing that gates a release is
-`scan-ci`, which runs with `--ignore-unfixed` and therefore fails only on findings a
-rebuild or a dependency bump can actually clear. An alert appearing there with a fixed
-version available is the signal worth acting on; the standing hundred are not, and no
-amount of triage will close them until Debian ships patches.
-
-The full unfiltered view, if you want it without the dashboard:
+The full unfiltered view, without the dashboard:
 
 ```bash
 dagger call scan --ignore-unfixed=false
@@ -107,44 +103,36 @@ source fallback either. On a musl base `uv sync` fails outright, which is exactl
 was found (`dagger call test-mcp` could not build the image). `pyarrow` does ship musl
 wheels; `lancedb` alone settles it.
 
-The security consequence is real, measured, and worth stating plainly rather than glossing.
-Trivy on this image reports **54 CRITICAL/HIGH findings — 3 CRITICAL and 51 HIGH — and every
-single one is unfixed upstream**: `perl-base`, `util-linux` and its libraries (`libblkid1`,
-`libmount1`, `libuuid1`, `libsmartcols1`, `login`, `mount`), `ncurses`, `gzip`, `libsqlite3-0`,
-`libsystemd0`. All of them are OS packages; **zero** are Python packages, so the dependency
-surface the application actually controls is clean (and `pip-audit` gates that separately).
+The security consequence used to be 54 CRITICAL/HIGH findings, every one unfixed upstream —
+`perl-base`, `util-linux` and its libraries, `ncurses`, `gzip`, `libsqlite3-0`, `libsystemd0`.
+That is the price of the wheels, and it is what a Debian base costs.
 
-None of it is actionable *within Debian* — there is no patched version to move to. That is
-precisely the package set an Alpine base avoids, and it is the price of the wheels. The image
-is also ~880 MB rather than a few hundred. A different glibc base does clear them; see
-[Wolfi, evaluated and deferred](#wolfi-evaluated-and-deferred) below.
+**Most of it was avoidable without changing base image.** The container runs one Python
+entrypoint as a non-root user; it never executes perl, the util-linux tools, or systemd's
+client libraries. Purging them in the final stage takes the image from **54 findings to 6,
+and from three CRITICALs to none** — measured, with the full MCP smoke test passing
+afterwards. See the Dockerfile for what is removed and why, and for the two packages
+deliberately kept.
 
-What is gained in exchange: `python:3.14-slim` is the same base the CI test container and
-the Dagger dev container use, so the published image runs on the same libc the tests ran
-on — the alternative would have been testing on glibc and shipping on musl.
+The six that remain are `ncurses` and `libsqlite3-0`, still unfixed and still unreachable.
+They stay because CPython links them: removing them does reach zero, and it breaks
+`import sqlite3`, `curses` and `readline`. Nothing here imports those today, but a future
+dependency that did would fail at runtime rather than at build time — a bad trade for six
+findings in libraries this server never calls.
 
-Both bases are pinned by digest, not just tag:
-
-```dockerfile
-FROM python:3.14-slim@sha256:cad9a2c871761c413caa6fdd6441c783451e740a48aaeba60ae62a8b53525ef6
-
-COPY --from=ghcr.io/astral-sh/uv:0.12.5@sha256:db2d5999728c5837e1bf9ba278ee6b05cef1e95e82a20e27b0c915cb4478b9d7 /uv /uvx /bin/
-```
-
-so a `vX.Y.Z` image tag stays reproducible: rebuilding it later cannot silently pick up a
-different base or `uv` build than the one that was actually scanned and signed at release
-time.
+Zero Python-package findings throughout; `pip-audit` gates that separately.
 
 ### Wolfi, evaluated and deferred
 
-Alpine is impossible, but it is not the only small base, and the 54 findings are not a fact
-of life. A multi-stage [Wolfi](https://github.com/wolfi-dev) build — `cgr.dev/chainguard/python:latest-dev`
+Alpine is impossible, but it is not the only small base, and the findings were never a fact
+of life — the purge above already removed 48 of the original 54. This section is what was
+measured before that, and is kept because it still decides the base image. A multi-stage [Wolfi](https://github.com/wolfi-dev) build — `cgr.dev/chainguard/python:latest-dev`
 to build, `cgr.dev/chainguard/python:latest` to run — was built and measured against the
 current image:
 
 | | `python:3.14-slim` | Wolfi, multi-stage |
 |---|---|---|
-| Trivy CRITICAL/HIGH | 54 (3 CRITICAL) | **0** |
+| Trivy CRITICAL/HIGH | 54 (3 CRITICAL), unpurged | **0** |
 | Image size | 879 MB | **704 MB** |
 | Python | 3.14.6 | 3.14.7 |
 | libc | glibc (Debian 13.6) | glibc 2.44 |
@@ -154,8 +142,9 @@ current image:
 
 It works. Wolfi is glibc, so the manylinux wheels install exactly as they do on Debian; the
 image was run and answered `/health`, and `lancedb` built an FTS index and returned hits from
-it. Wolfi simply does not ship `perl` or `util-linux` in a Python runtime, which is where all
-54 findings live. The runtime stage carries no shell or package manager, so it is also 175 MB
+it. Wolfi simply does not ship `perl` or `util-linux` in a Python runtime, which is where 48 of
+the original 54 findings lived — the same packages the purge now removes from the Debian
+image. The runtime stage carries no shell or package manager, so it is also 175 MB
 smaller than the Debian image despite the base being half the size of `python:3.14-slim`
 (98.9 MB against 191 MB).
 
@@ -173,16 +162,16 @@ Three other bases were measured:
 
 | base | CRITICAL/HIGH | fixable | Python | digest-stable | verdict |
 |---|---:|---:|---|---|---|
-| `python:3.14-slim` (current) | 54 | 0 | 3.14.6 | yes | in use |
+| `python:3.14-slim`, purged (current) | **6** | 0 | 3.14.6 | yes | in use |
+| `python:3.14-slim`, unpurged | 54 | 0 | 3.14.6 | yes | what the purge replaced |
 | Wolfi, multi-stage | **0** | 0 | 3.14.7 | **no** | deferred, see above |
 | `gcr.io/distroless/python3-debian13` | 22 | 0 | **3.13.5** | yes | needs reverting the 3.14 bump |
 | `gcr.io/distroless/python3-debian12` | 48 | 19 | 3.11 | yes | worse, and older |
 
-`python3-debian13` is the interesting near-miss: less than half the findings, none of them
-fixable either, and Google keeps its digests, so the reproducibility guarantee survives. It
-loses on the interpreter — Debian 13 ships Python 3.13, and both packages require >= 3.14.
-Reverting that bump to gain 32 unfixed, unreachable findings is not obviously worth it, but
-it is the option to reach for if the Wolfi digest problem stays unsolved.
+`python3-debian13` was the interesting near-miss before the purge. It is now behind the
+current image on findings (22 against 6) as well as on interpreter version, so the case for
+it has gone. Wolfi still reaches 0 and is 175 MB smaller, and still costs digest pinning —
+the purge closes most of that gap without paying for it.
 
 `python:3.14-alpine` is not a trade-off, it is impossible. `lancedb` publishes exactly four
 files — macOS arm64, manylinux aarch64, manylinux x86_64, Windows — with **no musllinux wheel
@@ -191,14 +180,15 @@ musllinux wheel or an sdist from upstream changes that; `pyarrow`, by contrast, 
 
 ### These findings are noise, not exposure
 
-Worth stating plainly before anyone spends a week on this: all 54 are unfixed, and none is
-reachable. They live in `perl-base`, `util-linux`, `ncurses` and `gzip` — packages the image
-carries but never executes. The container runs one Python entrypoint as `USER 1000`, and the
-release path is gated on *fixable* findings only.
+Worth stating plainly before anyone spends a week on the remaining six: they are unfixed, and
+none is reachable. `ncurses` and `libsqlite3-0` are linked by CPython and never called by
+this server, which runs one Python entrypoint as `USER 1000`. The release path gates on
+*fixable* findings only.
 
-So the case for a smaller base is signal-to-noise and attack surface, not exploitable risk:
-a Security tab showing 0 makes a real finding visible, where one showing 100 hides it. That
-is a real benefit, and it is a different benefit from the one the raw number suggests.
+So the case for going further — Wolfi's 0 — is signal-to-noise and attack surface, not
+exploitable risk. That is a real benefit, and a different one from what the raw number
+suggests. Removing the 48 that could be removed was worth doing because it was free; trading
+digest-pinned reproducibility for the last six is not obviously so.
 
 ## Non-root runtime
 
