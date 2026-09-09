@@ -1,13 +1,3 @@
----
-title: kansallisarkisto-mcp
-emoji: 📜
-colorFrom: indigo
-colorTo: blue
-sdk: docker
-app_port: 8000
-pinned: false
----
-
 <div align="center">
   <img src="https://raw.githubusercontent.com/AI-Riksarkivet/kansallisarkisto-mcp/main/docs/assets/logo-ka-bg.png" alt="kansallisarkisto-mcp logo" width="350">
 </div>
@@ -102,11 +92,6 @@ message rather than crashing, and the boot log names the tables it did find.
 | `KA_MCP_TRANSPORT` | `stdio` | `stdio` or `http`. |
 | `HOST` / `PORT` | `0.0.0.0` / `8000` | HTTP bind address. |
 | `LOG_LEVEL` | `INFO` | Root log level; logs go to stderr so stdio transport stays clean. |
-| `KA_MCP_OTEL_ENABLED` | `false` | Master switch for OpenTelemetry. Off means the instrumentation resolves to no-ops and no collector is contacted. |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4317` | Collector endpoint. |
-| `OTEL_EXPORTER_OTLP_PROTOCOL` | `grpc` | `grpc` or `http/protobuf`. |
-| `OTEL_SERVICE_NAME` | `kansallisarkisto-mcp` | Service name on the exported resource. |
-| `KA_MCP_OTEL_LOG_BRIDGE` | `true` | Bridge Python logging to OTel logs (only when telemetry is on). |
 | `KA_MCP_OTEL_ENABLED` | `false` | Master switch for OpenTelemetry. Unset, the SDK is never initialised and every instrumentation call resolves to a no-op — which is what a stdio client on a laptop should get. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4317` | Collector endpoint. Only read when telemetry is enabled. |
 | `OTEL_EXPORTER_OTLP_PROTOCOL` | `grpc` | `grpc` or `http/protobuf`. |
