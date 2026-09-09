@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>kansallisarkisto-mcp</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; }
+    html { overflow-x: hidden; width: 100%; }
+    body {
+      font-family: 'JetBrains Mono', monospace;
+      margin: 0;
+      background: #0b0b0b;
+      color: #eee;
+      min-height: 100vh;
+      padding: 12px;
+      overflow-x: hidden;
+      width: 100%;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .container { max-width: 720px; margin: 0 auto; width: 100%; }
+    .card {
+      background: #121212;
+      border: 1px solid #2a2a2a;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+      margin-bottom: 16px;
+      width: 100%;
+      overflow-wrap: break-word;
+    }
+    h1 { margin: 0 0 12px; font-size: 22px; color: #ffd28a; line-height: 1.3; }
+    h2 { margin: 0 0 12px; font-size: 18px; color: #ffe2b0; line-height: 1.3; }
+    h3 { margin: 16px 0 8px; font-size: 16px; color: #ffd28a; line-height: 1.3; }
+    p { font-size: 14px; line-height: 1.6; margin-bottom: 12px; overflow-wrap: break-word; }
+    ul { padding-left: 20px; margin: 0 0 12px; }
+    li { margin-bottom: 6px; }
+    .muted { color: #b8b8b8; }
+    .highlight {
+      background: #1a1a1a; padding: 3px 6px; border-radius: 4px;
+      color: #ffd28a; font-size: 13px; word-break: break-all;
+      display: inline-block; max-width: 100%; overflow-wrap: break-word;
+    }
+    pre {
+      background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px;
+      padding: 12px; overflow-x: auto; margin: 12px 0;
+      width: 100%; max-width: 100%; font-size: 13px; line-height: 1.5;
+    }
+    pre code { font-size: 13px; white-space: pre; display: block; }
+    code { background: #1a1a1a; padding: 2px 6px; border-radius: 3px; font-size: 13px; }
+    a {
+      color: #ffd28a; text-decoration: none;
+      border-bottom: 1px solid transparent; transition: border-color 0.2s;
+      word-break: break-word; overflow-wrap: break-word;
+    }
+    a:hover { border-bottom-color: #ffd28a; }
+    .logo { text-align: center; margin-bottom: 20px; padding: 12px; }
+    .logo-text {
+      font-size: 36px; font-weight: 600;
+      background: linear-gradient(135deg, #ffd28a, #ff9a5c);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text; margin: 0 0 8px 0; line-height: 1.2;
+    }
+    .logo-emoji { font-size: 44px; line-height: 1; }
+    .logo p:last-child { font-size: 13px; margin: 0; }
+    .badge {
+      display: inline-block; background: #3a2a1a; color: #ffd28a;
+      padding: 4px 10px; border-radius: 12px; font-size: 11px;
+      margin: 0 6px 6px 0; white-space: nowrap;
+    }
+    .docs-link {
+      display: inline-block; background: #ffd28a; color: #0b0b0b;
+      padding: 10px 20px; border-radius: 8px; font-weight: 600;
+      font-size: 14px; text-decoration: none; border: none;
+      transition: opacity 0.2s;
+    }
+    .docs-link:hover { opacity: 0.85; border-bottom: none; }
+    @media (min-width: 768px) {
+      body { padding: 18px; }
+      .card { padding: 20px; border-radius: 16px; }
+      h1 { font-size: 24px; }
+      .logo-text { font-size: 42px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">
+      <div class="logo-emoji" aria-hidden="true">📜</div>
+      <h1 class="logo-text">kansallisarkisto-mcp</h1>
+      <p class="muted">Full-text search over the machine-transcribed Sis&auml;lt&ouml;haku corpora of Kansallisarkisto, the National Archives of Finland</p>
+    </div>
+
+    <section class="card">
+      <h2>Connect</h2>
+      <p class="muted">No hosted endpoint yet &mdash; run it locally over stdio, or in Docker over streamable HTTP.</p>
+
+      <h3>Claude Code (stdio, from a clone)</h3>
+      <pre><code>make install
+make ingest-df          # builds data/df from .data/df/df.jsonl.gz
+claude mcp add kansallisarkisto -- uv run kansallisarkisto-mcp</code></pre>
+
+      <h3>Docker (streamable HTTP on :8000)</h3>
+      <pre><code>docker run -p 8000:8000 \
+  -v "$PWD/data:/data:ro" \
+  riksarkivet/kansallisarkisto-mcp:latest</code></pre>
+      <p class="muted" style="font-size: 12px;">The image ships without data: mount a LanceDB directory at <code>/data</code>, or point <code>KA_LANCEDB_URI</code> elsewhere. Without it the server still boots and the tools say so.</p>
+
+      <h3>MCP Inspector</h3>
+      <pre><code>make inspect</code></pre>
+    </section>
+
+    <section class="card">
+      <h2>Tools</h2>
+      <ul>
+        <li><code>df_search</code> &mdash; Full-text search over Diplomatarium Fennicum: 6,876 medieval charters concerning Finland, 859&ndash;1530. Filter by language, place and country of issue, and year range; page with <code>offset</code>.</li>
+        <li><code>df_get_charter</code> &mdash; One charter's full transcript and catalogue record by its DF number, the citable identifier carried on every hit.</li>
+      </ul>
+
+      <h3>Search tips</h3>
+      <ul>
+        <li><strong>The text is not in Finnish.</strong> Finland was part of the Swedish realm until 1809, so these documents are early-modern Swedish, Latin and German. Only the catalogue metadata is Finnish.</li>
+        <li>Search in period spelling: <code>bref</code> not <code>brev</code>, <code>konung</code> not <code>kung</code>, <code>&Aring;bo</code> not <code>Turku</code>, <code>Viborg</code> not <code>Viipuri</code>.</li>
+        <li>Swedish stemming and accent folding are applied &mdash; <code>konungen</code> finds <code>konung</code>, <code>Abo</code> finds <code>&Aring;bo</code>.</li>
+        <li>Language labels are unaccented Finnish: <code>venaja</code>, never <code>ven&auml;j&auml;</code>.</li>
+        <li>36% of the charters are catalogued but never transcribed. They are still returned &mdash; findable by place, index term and language &mdash; and marked as untranscribed.</li>
+        <li>Transcripts are OCR/HTR output over a millennium of handwriting. Check any quotation against the archive.</li>
+      </ul>
+
+      <div>
+        <span class="badge">Kansallisarkisto</span>
+        <span class="badge">Diplomatarium Fennicum</span>
+        <span class="badge">LanceDB</span>
+        <span class="badge">Full-text search</span>
+        <span class="badge">859&ndash;1530</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Learn more</h2>
+      <p class="muted">Parameter reference, corpus notes, and how the server is built and deployed:</p>
+      <a class="docs-link" href="https://carpelan.github.io/kansallisarkisto-mcp/" target="_blank">Documentation</a>
+      <p class="muted" style="margin-top: 12px; font-size: 12px;">
+        <a href="https://github.com/carpelan/kansallisarkisto-mcp" target="_blank">GitHub</a> &middot;
+        <a href="https://sisaltohaku.demo.kansallisarkisto.fi/" target="_blank">Sis&auml;lt&ouml;haku</a> &middot;
+        <a href="https://kansallisarkisto.fi/" target="_blank">Kansallisarkisto</a>
+      </p>
+    </section>
+  </div>
+</body>
+</html>
