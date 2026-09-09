@@ -11,7 +11,7 @@ entries concerning Finland, 859–1530.
 
 | parameter | type | default | notes |
 |---|---|---|---|
-| `keyword` | string | *(required)* | Search term, in the language of the documents and in period spelling. Swedish stemming and accent folding apply. Supports boolean syntax: `bref OR littera`. |
+| `keyword` | string | *(required)* | Search term, in the language of the documents and in period spelling. Swedish stemming and accent folding apply. Several words require **all** of them; `"quoted words"` require that exact phrase. |
 | `offset` | int ≥ 0 | `0` | Pagination start. |
 | `limit` | int 1–100 | `25` | Results per page. |
 | `language` | string | — | Exact, unaccented Finnish label: `ruotsi`, `latina`, `saksa`, `venaja`. |
@@ -19,6 +19,19 @@ entries concerning Finland, 859–1530.
 | `country` | string | — | Case-insensitive substring of the Finnish country label: `Suomi`, `Ruotsi`, `Italia`. |
 | `year_min` | int | — | Earliest year the charter may fall in. |
 | `year_max` | int | — | Latest year the charter may fall in. |
+| `match_all` | bool | `true` | Require every word. `false` matches any word — useful when a term may be spelled differently, but the total then counts charters matching only one word. |
+
+## Query syntax
+
+Several words must **all** appear. `"Quoted words"` must appear as that exact phrase.
+
+**`AND`, `OR` and `NOT` are not operators** — they are matched as ordinary words. Writing
+`bref OR littera` searches for `or` too, which on this corpus drags in 50 unrelated charters
+that happen to contain the word. To widen, drop a word or pass `match_all=false`.
+
+This matters for the total as much as the results. With any-word matching, `konung Stockholm`
+reports 944 charters while only 77 contain both — BM25 still puts the good ones first (19 of
+the first 20 contained both terms), but the total is a claim about the whole result set.
 
 ## How the filters behave
 
@@ -42,7 +55,9 @@ An inverted range is rejected up front rather than returning a silent empty resu
 ```
 df_search(keyword="konung")
 df_search(keyword="konung", issuingplace="Åbo", year_min=1300, year_max=1400)
-df_search(keyword="bref OR littera", language="latina", country="Italia")
+df_search(keyword="littera", language="latina", country="Italia")
+df_search(keyword="\"de ecclesia\"")                       # exact phrase
+df_search(keyword="Perugia Lateranen", match_all=False)   # either word
 df_search(keyword="Åbo", limit=50, offset=50)
 ```
 

@@ -38,6 +38,13 @@ The apparatus is now removed from the search text only. `transcript` still shows
 verbatim, because the apparatus is part of what a researcher is reading — so you may well see
 a `⁶` in a result whose word you found without one.
 
+## Several words mean all of them
+
+A multi-word keyword requires every word; `"quoted words"` require that exact phrase.
+`AND`, `OR` and `NOT` are **not** operators and are searched for literally, so `bref OR
+littera` also matches the 51 charters containing the word `or`. Widen by dropping a word or
+passing `match_all=false`, never by writing `OR`.
+
 ## A zero result means the term is absent
 
 `kirkko` — the Finnish for "church" — appears in **zero** of the 6,876 charters. That is not
