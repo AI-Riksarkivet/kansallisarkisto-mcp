@@ -8,6 +8,11 @@ app_port: 8000
 pinned: false
 ---
 
+<div align="center">
+  <img src="https://raw.githubusercontent.com/AI-Riksarkivet/kansallisarkisto-mcp/main/docs/assets/logo-ka-bg.png" alt="kansallisarkisto-mcp logo" width="350">
+</div>
+
+
 # kansallisarkisto-mcp
 
 [![Tests](https://github.com/AI-Riksarkivet/kansallisarkisto-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/AI-Riksarkivet/kansallisarkisto-mcp/actions/workflows/ci.yml)
