@@ -145,10 +145,6 @@ jobs:
     with:
       image: ${{ needs.publish.outputs.image }}
       digest: ${{ needs.publish.outputs.digest }}
-      # Private repo: acknowledge that the signed provenance (and with it the
-      # repo name) lands in the public Rekor log — already the case via the
-      # cosign sign step's Rekor entry.
-      private-repository: true
     secrets:
       registry-username: ${{ secrets.DOCKERHUB_USERNAME }}
       registry-password: ${{ secrets.DOCKERHUB_SECRET }}

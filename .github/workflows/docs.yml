@@ -1,9 +1,8 @@
 name: Documentation
-# The AI-Riksarkivet org is on the Team plan, which does serve Pages from a
-# private repository, so this builds on every push to main rather than by hand.
-# The published site is public even though the repo is not — access control for
-# Pages needs Enterprise Cloud. No path filter: zensical's snippets can pull in
-# files from outside docs/, so a filtered trigger would silently skip rebuilds.
+# Builds on every push to main, so the published site cannot fall behind the
+# docs in the tree. No path filter: zensical's snippets extension has base_path
+# ["."], so a page can pull in a file from outside docs/ and a filtered trigger
+# would silently skip that rebuild. The build takes ~25s.
 on:
   push:
     branches: [main]

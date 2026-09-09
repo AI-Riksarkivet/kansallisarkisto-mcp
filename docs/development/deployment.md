@@ -97,7 +97,4 @@ version unless `--skip-validation` is passed.
 `.github/workflows/docs.yml` builds this site with `zensical build --clean` and deploys it to
 GitHub Pages on every push to `main`, and on demand via `workflow_dispatch`.
 
-Pages is served from a private repository because the `AI-Riksarkivet` org is on the Team
-plan. **The published site is public even though the repository is not** — restricting a
-Pages site to org members needs Enterprise Cloud — so treat everything under `docs/` as
-world-readable.
+The repository is public, so the site is too: <https://ai-riksarkivet.github.io/kansallisarkisto-mcp/>.
