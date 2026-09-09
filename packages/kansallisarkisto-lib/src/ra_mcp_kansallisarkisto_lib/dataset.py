@@ -121,7 +121,19 @@ def build_fts_index(
         config=FTS(
             language=language,
             stem=True,
-            remove_stop_words=True,
+            # Stop words are KEPT, which is not the usual default and is a
+            # consequence of the corpus being multilingual. Swedish stop words are
+            # Latin content words: with removal on, "de" (a token in 1,735
+            # documents), "den" (846) and "om" (1,133) returned nothing at all,
+            # because a Swedish analyser had discarded them at index time. They are
+            # function words in the plurality language and meaningful in the rest,
+            # so the recall loss is not worth the smaller index.
+            remove_stop_words=False,
+            # Positions cost index size and buy phrase queries. Without them a
+            # quoted query does not merely miss, it raises — which the MCP layer
+            # can only report as an internal error for what is a perfectly
+            # reasonable search.
+            with_position=True,
             ascii_folding=True,
             max_token_length=64,
         ),
