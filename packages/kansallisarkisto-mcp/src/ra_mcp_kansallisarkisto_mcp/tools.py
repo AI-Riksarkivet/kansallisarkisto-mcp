@@ -29,6 +29,10 @@ kansallisarkisto_mcp: FastMCP = FastMCP(
         'Several words in a keyword must all appear, and a "quoted phrase" must appear exactly. '
         "AND, OR and NOT are not operators — they are searched for as ordinary words — so widen by "
         "removing a word or passing match_all=false, never by writing OR. "
+        "Spelling was never standardised, and that is the usual reason a search looks empty: "
+        "'bref' and 'breff' are the same word yet share only 71 of their 2,104 charters. When a "
+        "result set looks thin, retry with fuzzy=1 on a base form before concluding the archive "
+        "has nothing. "
         "Cite the DF number — it is the identifier a researcher quotes and the only stable handle "
         "on a charter. Reply to the user in the user's own language, but reproduce DF numbers, "
         "place names and language labels verbatim: they are what the user cites and what you pass "

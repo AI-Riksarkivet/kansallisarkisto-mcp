@@ -96,6 +96,21 @@ def register_df_tools(mcp: FastMCP, get_search) -> None:
                 )
             ),
         ] = True,
+        fuzzy: Annotated[
+            int,
+            Field(
+                description=(
+                    "Edit distance per term, 0-2. Default 0. Spelling in these charters is not "
+                    "standardised, so exact search finds one scribe's spelling and misses the rest: "
+                    "'bref' matches 257 charters, 'breff' matches 1,918, and only 71 overlap. "
+                    "fuzzy=1 takes 'bref' to 2,212 and is the right second attempt when a search "
+                    "looks thin. It is not the default because a fuzzy term skips stemming, so pass "
+                    "a base form ('konung', not 'konungen' — which collapses from 279 hits to 6)."
+                ),
+                ge=0,
+                le=2,
+            ),
+        ] = 0,
     ) -> str:
         if err := require_keyword(keyword, "'konung' or 'littera'"):
             return err
@@ -112,6 +127,7 @@ def register_df_tools(mcp: FastMCP, get_search) -> None:
                 year_min=year_min,
                 year_max=year_max,
                 match_all=match_all,
+                fuzzy=fuzzy,
             )
         except MissingTableError as exc:
             # A deployment state the operator can fix, so it is explained in full
