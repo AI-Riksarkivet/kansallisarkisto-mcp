@@ -6,9 +6,28 @@ Only ``df`` (Diplomatarium Fennicum) is modelled so far; ``voudintilit`` and
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
+
+# Diplomatarium Fennicum is a scholarly edition, so its transcripts carry
+# editorial apparatus inline: footnote markers as superscripts fused to the word
+# they annotate ("Hundæbæth⁶", "Karulj²") and editorial insertions in square
+# brackets, sometimes mid-word ("Fi[n]llandh"). A tokeniser has no reason to treat
+# either as punctuation, so the indexed token becomes "hundæbæth⁶" and the plain
+# word is unfindable. Measured on this corpus: 2,266 fused occurrences across 621
+# records (14% of the transcribed ones), plus 4,801 bracketed forms across 1,969.
+# Stripped from the search text only — `transcript` keeps the edition verbatim,
+# because the apparatus is part of what a researcher is reading.
+_FOOTNOTE_MARKS = re.compile(r"[\u2070-\u209f\u00b0\u00b2\u00b3\u00b9]+")
+_EDITORIAL_BRACKETS = re.compile(r"[\[\]]")
+
+
+def strip_editorial_apparatus(text: str) -> str:
+    """Remove footnote superscripts and editorial brackets from text for indexing."""
+    return _EDITORIAL_BRACKETS.sub("", _FOOTNOTE_MARKS.sub("", text))
+
 
 # A year field of 0 in the source means "unknown", not year 0. Left as a literal 0
 # it silently pollutes every date range — 6,843 of the 6,876 df records carry
@@ -121,7 +140,7 @@ class DfRecord(BaseModel):
         keeps them in the result set.
         """
         parts = [
-            self.transcript,
+            strip_editorial_apparatus(self.transcript),
             self.issuingplace,
             self.issuingplacecountry,
             self.indexterm,
