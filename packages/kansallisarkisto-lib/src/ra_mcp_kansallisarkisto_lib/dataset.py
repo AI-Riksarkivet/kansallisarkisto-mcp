@@ -119,7 +119,7 @@ def table_names(db: lancedb.DBConnection) -> list[str]:
 def build_fts_index(
     db: lancedb.DBConnection,
     table_name: str,
-    column: str = "searchable_text",
+    column: str = FTS_COLUMN,
     *,
     language: str = "Swedish",
 ) -> lancedb.table.Table:

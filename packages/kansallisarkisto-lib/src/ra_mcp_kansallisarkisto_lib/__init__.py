@@ -3,6 +3,7 @@
 from .config import DEFAULT_LIMIT, DF_TABLE, MAX_LIMIT, resolve_lancedb_uri
 from .dataset import (
     MAX_TOTAL_COUNT,
+    SearchInputError,
     SearchResult,
     build_fts_index,
     build_scalar_indexes,
@@ -24,6 +25,7 @@ __all__ = [
     "MAX_TOTAL_COUNT",
     "DfRecord",
     "DfSearch",
+    "SearchInputError",
     "SearchResult",
     "build_fts_index",
     "build_scalar_indexes",
