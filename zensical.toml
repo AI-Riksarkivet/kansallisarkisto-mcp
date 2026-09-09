@@ -1,0 +1,103 @@
+[project]
+site_name = "kansallisarkisto-mcp"
+site_description = "MCP server over the Kansallisarkisto Sisältöhaku corpora — LanceDB full-text search across machine-transcribed Finnish archival records."
+site_author = "carpelan"
+site_url = "https://carpelan.github.io/kansallisarkisto-mcp/"
+copyright = """
+Copyright &copy; 2026 carpelan
+"""
+repo_url = "https://github.com/carpelan/kansallisarkisto-mcp"
+repo_name = "carpelan/kansallisarkisto-mcp"
+edit_uri = "edit/main/docs/"
+
+nav = [
+  { "kansallisarkisto-mcp" = [
+    "index.md",
+  ]},
+  { "Getting Started" = [
+    {"Connect" = "getting-started/index.md"},
+    {"Local Install" = "getting-started/local.md"},
+  ]},
+  { "How it Works" = [
+    {"MCP & Tools" = "how-it-works/index.md"},
+    {"The Corpora" = "how-it-works/data-sources.md"},
+    {"Search Tips" = "how-it-works/search-tips.md"},
+  ]},
+  { "Tools" = [
+    {"Overview" = "tools/index.md"},
+    {"df_search" = "tools/df-search.md"},
+    {"df_get_charter" = "tools/df-get-charter.md"},
+  ]},
+  { "API" = [
+    {"Overview" = "api/index.md"},
+    {"Ingest" = "api/ingest.md"},
+    {"Search" = "api/search.md"},
+    {"Models" = "api/models.md"},
+  ]},
+  { "Development" = [
+    {"Setup" = "development/index.md"},
+    {"Deployment" = "development/deployment.md"},
+    {"Security" = "development/security.md"},
+  ]},
+]
+
+[project.theme]
+language = "en"
+
+features = [
+    "announce.dismiss",
+    "content.action.edit",
+    "content.action.view",
+    "content.code.annotate",
+    "content.code.copy",
+    "content.code.select",
+    "content.footnote.tooltips",
+    "content.tabs.link",
+    "content.tooltips",
+    "navigation.footer",
+    "navigation.instant",
+    "navigation.instant.prefetch",
+    "navigation.path",
+    "navigation.tabs",
+    "navigation.tabs.sticky",
+    "navigation.top",
+    "navigation.tracking",
+    "search.highlight",
+]
+
+[[project.theme.palette]]
+scheme = "default"
+primary = "indigo"
+accent = "blue"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+scheme = "slate"
+primary = "indigo"
+accent = "blue"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to light mode"
+
+[project.theme.icon]
+repo = "fontawesome/brands/github"
+
+[[project.extra.social]]
+icon = "fontawesome/brands/github"
+link = "https://github.com/carpelan/kansallisarkisto-mcp"
+
+[[project.extra.social]]
+icon = "fontawesome/brands/docker"
+link = "https://hub.docker.com/r/riksarkivet/kansallisarkisto-mcp"
+
+[project.markdown_extensions.pymdownx.snippets]
+base_path = ["."]
+
+[project.markdown_extensions.pymdownx.superfences]
+custom_fences = [
+  { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" },
+]
+
+# API pages under docs/api/ are hand-curated. zensical's mkdocstrings compat
+# bridge aborts the whole rendering pass on `:::` blocks (same issue as ra-mcp
+# and ape-mcp) — do not add autodoc directives.
