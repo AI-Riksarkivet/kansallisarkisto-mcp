@@ -70,7 +70,6 @@ is what `DfSearch` calls, and what the other two corpora will call. Filters arri
 | `equals(col, v)` | `col = 'v'` (bare for ints) |
 | `at_least(col, v)` / `at_most(col, v)` | `col >= v` / `col <= v` |
 | `text_contains(col, v)` | `lower(col) LIKE '%v%' ESCAPE '\'` |
-| `any_of(a, b)` | `(a OR b)` |
 | `combine(a, None, b)` | `a AND b`, or `None` when nothing is set |
 
 Two quoting details are load-bearing. String literals double their single quotes, so a place

@@ -334,11 +334,6 @@ def at_most(column: str, value: str | int) -> str:
     return f"{column} <= {_lit(value)}"
 
 
-def any_of(*predicates: str) -> str:
-    """OR-combine predicates into one parenthesised predicate."""
-    return "(" + " OR ".join(predicates) + ")"
-
-
 def combine(*predicates: str | None) -> str | None:
     """AND-combine predicates, dropping ``None`` (an unset filter).
 
