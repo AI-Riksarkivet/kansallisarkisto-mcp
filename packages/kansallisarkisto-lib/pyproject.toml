@@ -5,6 +5,9 @@ description = "Kansallisarkisto Sisältöhaku corpora — LanceDB ingest and ful
 requires-python = ">=3.14"
 license = "Apache-2.0"
 dependencies = [
+    # API only, never the SDK: the SDK is initialised in the server package alone.
+    # With no SDK configured these resolve to no-ops, so telemetry off costs nothing.
+    "opentelemetry-api>=1.28.0",
     "lancedb>=0.20,<1",
     "pyarrow>=18,<25",
     "pydantic>=2,<3",
