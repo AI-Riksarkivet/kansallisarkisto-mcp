@@ -1,8 +1,9 @@
 name: Secret Leaks
 
-# GitHub's own secret scanning is not available here — it needs Code Security,
-# which this private repository does not have (the API answers 403). So this is
-# not a duplicate of a platform feature; it is the only secret scanning there is.
+# GitHub's own secret scanning is enabled now that the repository is public, so
+# this is no longer the only line of defence — but it is not redundant either: it
+# walks the whole history rather than watching new pushes, and it verifies a
+# candidate against its provider instead of matching a pattern.
 #
 # fetch-depth: 0 because a secret that was committed and then removed is still in
 # the history, and still leaked.

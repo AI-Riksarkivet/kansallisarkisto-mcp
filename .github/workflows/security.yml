@@ -60,12 +60,12 @@ jobs:
           path: ./trivy-results.sarif
           if-no-files-found: error
 
-      # The Security tab is where this belongs, but code scanning needs GitHub
-      # Code Security, which is off for this private repository — the API answers
-      # 403. continue-on-error keeps the job honest until it is enabled, at which
-      # point this step starts working with no other change.
+      # This works now that the repository is public — code scanning is free for
+      # public repositories, and the last run put 173 Trivy results in the
+      # Security tab. It was continue-on-error while the repo was private and the
+      # API answered 403; that guard is gone, so a genuine upload failure fails
+      # the job instead of passing silently.
       - name: Upload SARIF to the Security tab
-        continue-on-error: true
         uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
         with:
           sarif_file: ./trivy-results.sarif
