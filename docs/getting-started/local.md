@@ -6,13 +6,13 @@ icon: lucide/hard-drive
 
 ## Requirements
 
-- Python 3.13 and [uv](https://docs.astral.sh/uv/)
+- Python 3.14 and [uv](https://docs.astral.sh/uv/)
 - A harvested Sisältöhaku export (see [The Corpora](../how-it-works/data-sources.md))
 
 ## Build the table
 
 ```bash
-git clone https://github.com/carpelan/kansallisarkisto-mcp
+git clone https://github.com/AI-Riksarkivet/kansallisarkisto-mcp
 cd kansallisarkisto-mcp
 make install
 make ingest-df

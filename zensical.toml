@@ -2,12 +2,12 @@
 site_name = "kansallisarkisto-mcp"
 site_description = "MCP server over the Kansallisarkisto Sisältöhaku corpora — LanceDB full-text search across machine-transcribed Finnish archival records."
 site_author = "carpelan"
-site_url = "https://carpelan.github.io/kansallisarkisto-mcp/"
+site_url = "https://ai-riksarkivet.github.io/kansallisarkisto-mcp/"
 copyright = """
 Copyright &copy; 2026 carpelan
 """
-repo_url = "https://github.com/carpelan/kansallisarkisto-mcp"
-repo_name = "carpelan/kansallisarkisto-mcp"
+repo_url = "https://github.com/AI-Riksarkivet/kansallisarkisto-mcp"
+repo_name = "AI-Riksarkivet/kansallisarkisto-mcp"
 edit_uri = "edit/main/docs/"
 
 nav = [
@@ -84,7 +84,7 @@ repo = "fontawesome/brands/github"
 
 [[project.extra.social]]
 icon = "fontawesome/brands/github"
-link = "https://github.com/carpelan/kansallisarkisto-mcp"
+link = "https://github.com/AI-Riksarkivet/kansallisarkisto-mcp"
 
 [[project.extra.social]]
 icon = "fontawesome/brands/docker"

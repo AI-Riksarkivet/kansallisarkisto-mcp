@@ -67,7 +67,7 @@ attestation that vouches for it. Consumers verify with:
 
 ```bash
 slsa-verifier verify-image docker.io/riksarkivet/kansallisarkisto-mcp@<digest> \
-  --source-uri github.com/carpelan/kansallisarkisto-mcp
+  --source-uri github.com/AI-Riksarkivet/kansallisarkisto-mcp
 ```
 
 ## Base image, digest-pinned

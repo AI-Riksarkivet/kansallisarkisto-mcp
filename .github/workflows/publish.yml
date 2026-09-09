@@ -105,7 +105,7 @@ jobs:
   # builder (own OIDC identity — the publish job above cannot forge it), signed
   # keylessly via Sigstore, and attached to the image in the registry. Verify:
   #   slsa-verifier verify-image docker.io/riksarkivet/kansallisarkisto-mcp@<digest> \
-  #     --source-uri github.com/carpelan/kansallisarkisto-mcp
+  #     --source-uri github.com/AI-Riksarkivet/kansallisarkisto-mcp
   # The generator must be referenced by release tag (not SHA): slsa-verifier
   # validates the builder identity against the tagged workflow ref.
   provenance:
