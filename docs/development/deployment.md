@@ -61,11 +61,25 @@ indexes are baked in at ingest time and the served copy is read-only.
 2. Tag `vX.Y.Z` and push the tag.
 
 `.github/workflows/publish.yml` then validates that the tag matches
-`packages/kansallisarkisto-mcp/pyproject.toml`, runs the Dagger test suite, builds and pushes
-`riksarkivet/kansallisarkisto-mcp:vX.Y.Z` and `:latest` with an SBOM and `provenance=mode=max`
-attached, extracts the provenance back out of the pushed image as a release asset, signs the
+`packages/kansallisarkisto-mcp/pyproject.toml`, runs the Dagger test suite, gates on
+`dagger call scan-ci` (Trivy CRITICAL/HIGH, fixable only) **before** anything is pushed,
+builds and pushes `riksarkivet/kansallisarkisto-mcp:vX.Y.Z` and `:latest` with an SBOM and
+`provenance=mode=max` attached, extracts the provenance back out of the pushed image as a release asset, signs the
 image keylessly with cosign, and hands the digest to the SLSA trusted builder for Build L3
 provenance. See [Security](security.md).
+
+### What a manual run publishes
+
+`publish.yml` also accepts a `workflow_dispatch`, and a dispatch is **not** a release:
+
+- It still builds, scans, pushes, signs and generates **SLSA L3 provenance** — every image
+  this workflow pushes is attested, on either trigger. That is the point of the job carrying
+  no tag gate.
+- It pushes only `:vX.Y.Z`, taken from `packages/kansallisarkisto-mcp/pyproject.toml`. It does
+  **not** move `:latest`, because the tag/version validation cannot run without a tag ref, and
+  an unvalidated build must not be able to replace the image everyone pulls by default.
+- It skips the two release-asset steps (extracting the provenance blob and uploading it), which
+  attach to a GitHub release a dispatch run does not have.
 
 The Dagger module can also publish directly:
 

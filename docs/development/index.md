@@ -42,7 +42,7 @@ its own — each package's version lives in its own `pyproject.toml`.
 | `check` | `format`, `lint`, `typecheck` | Composite: all three local code-quality checks. |
 | `test` | `uv run pytest` | Run the test suite directly against the local venv. |
 | `test-mcp` | `dagger call test-mcp` | End-to-end: production image + fixture table + real MCP client. |
-| `ci` | `dagger call checks` then `dagger call test` | Full CI pipeline via Dagger, containerised. |
+| `ci` | `dagger call checks`, `dagger call test`, `dagger call test-mcp` | Full CI pipeline via Dagger, containerised — the same three calls `.github/workflows/ci.yml` makes. |
 | `serve-image` | `dagger call serve-up --port 8000 up --ports 8000:8000` | Run the production image on the Dagger engine, with the test fixture already ingested, exposed on the host. |
 | `clean` | | Remove `__pycache__`, `.ruff_cache`, `dist/`, `build/`, `*.egg-info`. |
 
@@ -85,8 +85,8 @@ every function with `dagger functions`.
 - **`dagger call serve-up --port 8000 up`** — the image, with the fixture table already
   ingested, exposed on the host for manual poking.
 
-`make ci` runs exactly what `.github/workflows/ci.yml` runs, so running it before pushing
-catches the same failures CI would.
+`make ci` runs exactly what `.github/workflows/ci.yml` runs — `checks`, `test` and `test-mcp` —
+so running it before pushing catches the same failures CI would.
 
 ### Three choices worth knowing about
 

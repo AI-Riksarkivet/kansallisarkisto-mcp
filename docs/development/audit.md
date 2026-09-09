@@ -112,24 +112,52 @@ probe's result feeds.
 
 ### 5. The end-to-end test that CI needs most is the one CI never runs
 
-`.github/workflows/ci.yml` runs `dagger call checks` and `dagger call test`. That is all.
+!!! success "Resolved"
+
+    `test-mcp` now runs in `.github/workflows/ci.yml` and `scan-ci` gates
+    `publish.yml` before the push; `make ci` runs all three calls so it still matches CI.
+    Both were verified green locally before wiring — `scan-ci` reports 0 findings across
+    every target, and `test-mcp` passes all 6 checks. The remaining unwired functions below
+    are still unwired.
+
+`.github/workflows/ci.yml` ran `dagger call checks` and `dagger call test`. That was all.
 
 `docs/development/index.md` describes `test-mcp` as "the only place the **index configuration**
 is verified end to end — Swedish stemming and accent folding are index-time settings, so a
 wrong FTS config is invisible to anything that searches only exact forms." It is correct, and
-that check runs only when someone types `make test-mcp` locally.
+that check ran only when someone typed `make test-mcp` locally.
 
-Eleven Dagger functions are wired into no workflow and no Make target:
+`publish.yml` ran `test`, but not `checks` and not `scan` — so a release image was built and
+pushed without the Trivy gate that `docs/development/security.md` describes in detail.
+
+Ten Dagger functions remain wired into no workflow and no Make target. None is a gate, so
+none is urgent, but each is code that is maintained and never executed:
 
 ```
-scan          scan-json     scan-ci      scan-sarif
+scan          scan-json     scan-sarif
 generate-sbom-spdx    generate-sbom-cyclone-dx    export-sbom
 test-server   test-published    serve-published    publish-docker
 ```
 
-`publish.yml` runs `test`, but not `checks` and not `scan` — so a release image is built and
-pushed without the Trivy gate that `docs/development/security.md` describes in detail. The
-scanning, SBOM and health-check machinery is all written; none of it gates anything.
+`scan-sarif` is the notable one: it exists to feed GitHub's Security tab, and nothing uploads
+its output.
+
+### 5b. `workflow_dispatch` published without provenance
+
+!!! success "Resolved"
+
+    The `provenance` job's `if: startsWith(github.ref, 'refs/tags/v')` gate is removed, so
+    every image the workflow pushes is attested. A dispatch no longer moves `:latest`.
+
+Found while wiring the above. `publish.yml` fires on tag pushes **and** `workflow_dispatch`,
+and the publish job pushed `:latest` on both — but the SLSA L3 `provenance` job, the
+provenance extraction and the release upload were all gated on a tag ref. A manual run
+therefore replaced the image everyone pulls by default with one carrying no SLSA attestation,
+having also skipped the tag/version validation, which cannot run without a tag.
+
+The provenance job is now ungated: it attaches the attestation to a registry **digest**, which
+exists on either trigger. The two release-asset steps stay tag-gated, since they attach to a
+GitHub release that a dispatch run does not have.
 
 ### 6. The fixture holds 18 charters, and seven places say 16
 
@@ -225,7 +253,6 @@ Checked because it looked risky, and found sound — recorded so it need not be 
 1. **Findings 3, 6, 7, 8** — pure text, no behaviour risk, and they are what a reader trusts.
 2. **Finding 1** — a range guard in `get_charter`, restoring a documented contract.
 3. **Finding 2** — one sentence in the field description, or an explicit rejection.
-4. **Finding 5** — add `test-mcp` to `ci.yml` and `scan-ci` to `publish.yml`. The functions
-   exist and are tested; this is wiring, and it is the finding with the most leverage.
+4. ~~**Finding 5**~~ — done, along with **5b**, which the wiring turned up.
 5. **Finding 4** — readiness versus liveness, once the deployment target is settled.
 6. **Finding 11** — `LICENSE` first; the rest as they are passed.

@@ -24,7 +24,8 @@ and lockfile:
 
 - **`scan-json`** — same scan, JSON output, exit code `0` (never fails the build).
 - **`scan-ci`** — the CRITICAL/HIGH gate phrased for a pipeline: non-zero exit and a wrapped
-  error message on failure.
+  error message on failure. `.github/workflows/publish.yml` runs this **before** the push, so
+  a release that would ship a fixable CRITICAL or HIGH never reaches the registry.
 - **`scan-sarif`** — SARIF output to a file (`trivy-results.sarif` by default), the format
   GitHub's Security tab ingests.
 
