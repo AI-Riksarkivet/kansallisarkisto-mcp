@@ -60,9 +60,11 @@ class DfSearch:
             match_all: Require every word of the keyword (the default). False
                 widens to any word, which helps when a term may be spelled
                 differently but makes the total far less meaningful.
-            fuzzy: Edit distance allowed per term (default 1). Historical
-                spelling is unstandardised, so exact matching finds one scribe's
-                spelling and misses the rest. Pass 0 for an exact count.
+            fuzzy: Edit distance allowed per term; 0 by default, because fuzzy
+                matching and stemming are mutually exclusive in the engine.
+                Historical spelling is unstandardised, so raising it to 1 reaches
+                variants a single spelling misses — best on a base form. Cannot
+                be combined with a quoted phrase.
 
         Returns:
             SearchResult with matching records.
@@ -92,6 +94,11 @@ class DfSearch:
         try:
             number = int(df_number)
         except (TypeError, ValueError):
+            return None
+        # df_number is an int32 column: a value outside its range cannot be a
+        # charter, and letting the predicate fail turns an ordinary out-of-range
+        # lookup into "the search failed with an internal ValueError".
+        if not -(2**31) <= number < 2**31:
             return None
 
         table = self._db.open_table(self._table_name)

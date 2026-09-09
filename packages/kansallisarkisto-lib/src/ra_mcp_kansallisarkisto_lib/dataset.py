@@ -55,6 +55,20 @@ FTS_COLUMN = "searchable_text"
 # inflected one.
 DEFAULT_FUZZINESS = 0
 
+
+class SearchInputError(ValueError):
+    """A search argument the caller can correct, as opposed to a server fault.
+
+    Subclasses ``ValueError`` so existing callers that catch one keep working.
+    It exists so the MCP layer can tell *this* library's validation messages —
+    which are written for the caller and safe to return — from an arbitrary
+    ``ValueError``, which is not: lancedb raises ``ValueError`` too, and its
+    messages quote on-disk dataset paths and internal query structure. Catching
+    the base class would hand those straight to a public HTTP client, which is
+    exactly what ``formatter.format_error`` exists to prevent.
+    """
+
+
 _connections: dict[str, lancedb.DBConnection] = {}
 _connections_lock = threading.Lock()
 
@@ -232,23 +246,29 @@ def lancedb_fts_search(
     Requiring every term gives 77, which is the number that was actually meant.
     Pass ``match_all=False`` to widen when a term may be spelled differently.
 
-    ``fuzzy`` is the edit distance allowed per term; see :data:`DEFAULT_FUZZINESS`
-    for why it defaults to 1 rather than 0. Pass 0 for exact matching when the
-    spelling is known and the count has to be exact.
+    ``fuzzy`` is the edit distance allowed per term, defaulting to
+    :data:`DEFAULT_FUZZINESS`; see that constant for why it is 0. Raise it to
+    reach spelling variants, at the cost of stemming.
+
+    Fuzziness cannot be combined with a quoted phrase: the phrase goes to the
+    query parser, which takes no fuzziness argument. Rather than drop the
+    argument silently, that combination raises.
 
     Raises:
-        ValueError: if ``keyword`` is blank, ``offset`` is negative or ``limit`` < 1.
+        SearchInputError: if ``keyword`` is blank, ``offset`` is negative, ``limit`` < 1,
+            or ``fuzzy`` is combined with a quoted phrase. A ``ValueError`` subclass, and
+            the only error type whose message is safe to show a caller.
     """
     if not keyword or not keyword.strip():
-        raise ValueError("keyword must be non-empty")
+        raise SearchInputError("keyword must be non-empty")
     # Guard paging centrally so every tool inherits it: without this a negative
     # offset or limit < 1 slices matches[] into an empty/partial window while
     # total_hits stays nonzero, so the formatter misreports "no results" or emits
     # a broken "offset=-N" pagination footer.
     if offset < 0:
-        raise ValueError(f"offset must be >= 0 (got {offset})")
+        raise SearchInputError(f"offset must be >= 0 (got {offset})")
     if limit < 1:
-        raise ValueError(f"limit must be >= 1 (got {limit})")
+        raise SearchInputError(f"limit must be >= 1 (got {limit})")
 
     table = db.open_table(table_name)
     # A quoted keyword goes to the query parser, which is what understands phrase
@@ -256,6 +276,12 @@ def lancedb_fts_search(
     # turn '"de ecclesia"' from 8 hits into 496. Everything else goes through
     # MatchQuery so that match_all can be honoured — the parser has no AND.
     if '"' in keyword:
+        # The parser is what understands phrase syntax, and it has no fuzziness
+        # argument. Silently dropping the caller's fuzzy= is the same failure the
+        # tool descriptions were just cleaned of: a parameter that is offered and
+        # then quietly discarded.
+        if fuzzy:
+            raise SearchInputError(f"fuzzy={fuzzy} cannot be combined with a quoted phrase; drop the quotes to search the words fuzzily, or use fuzzy=0 for the exact phrase")
         request: Any = keyword
     else:
         operator = FullTextOperator.AND if match_all else FullTextOperator.OR
