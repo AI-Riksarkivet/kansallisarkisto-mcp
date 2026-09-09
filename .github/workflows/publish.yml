@@ -19,6 +19,8 @@ jobs:
       digest: ${{ steps.build.outputs.digest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # git-cliff needs the tag history to find "the latest release"
 
       - name: Determine version and image tags
         id: version
@@ -130,10 +132,21 @@ jobs:
           cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
           version: "latest"
 
+      - name: Install git-cliff
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: taiki-e/install-action@c3ec0de9ae7f1019cea21aa96aa0a895b9552063 # v2.87.9
+        with:
+          tool: git-cliff
+
+      - name: Generate the changelog for this tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: git cliff --latest --strip header --output RELEASE_NOTES.md
+
       - name: Upload attestations and SBOMs as release assets
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
+          body_path: RELEASE_NOTES.md
           files: |
             ./provenance.intoto.jsonl
             ./sbom.spdx.json
