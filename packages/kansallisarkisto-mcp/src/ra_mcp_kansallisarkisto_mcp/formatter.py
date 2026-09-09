@@ -17,6 +17,23 @@ from ra_mcp_kansallisarkisto_lib.dataset import SearchResult, format_results
 SNIPPET_CHARS = 400
 
 
+def _oneline(value: str) -> str:
+    """Collapse a field to a single line before it goes into a result block.
+
+    The output is a structured block that a model reads as a list of records, and
+    the fields are interpolated into it. A newline inside one lets the field forge
+    the structure around it — a fabricated "**DF 9999**" header, or a "More
+    results available" footer — and the model has no way to tell the difference.
+    No record in the current corpus contains one, but that is a property of this
+    snapshot: the index is re-harvestable and grows, and the two larger corpora
+    are millions of pages of OCR.
+
+    The consequence is the one this project can least afford: a citation to a
+    charter that does not exist.
+    """
+    return " ".join(value.split())
+
+
 def _snippet(text: str, limit: int = SNIPPET_CHARS) -> str:
     text = " ".join(text.split())
     if len(text) <= limit:
@@ -39,16 +56,16 @@ def _dating(rec: dict[str, Any]) -> str:
 
 
 def _place(rec: dict[str, Any]) -> str:
-    place = rec.get("issuingplace") or ""
-    country = rec.get("issuingplacecountry") or ""
+    place = _oneline(rec.get("issuingplace") or "")
+    country = _oneline(rec.get("issuingplacecountry") or "")
     if place and country:
         return f"{place}, {country}"
     return place or country or "place of issue unrecorded"
 
 
 def _render_charter(rec: dict[str, Any], lines: list[str]) -> None:
-    lines.append(f"**DF {rec.get('df', '?')}** — {_dating(rec)} — {_place(rec)}")
-    details = [f"language: {rec['language']}" if rec.get("language") else "", f"index term: {rec['indexterm']}" if rec.get("indexterm") else ""]
+    lines.append(f"**DF {_oneline(str(rec.get('df', '?')))}** — {_dating(rec)} — {_place(rec)}")
+    details = [f"language: {_oneline(rec['language'])}" if rec.get("language") else "", f"index term: {_oneline(rec['indexterm'])}" if rec.get("indexterm") else ""]
     detail_line = " · ".join(d for d in details if d)
     if detail_line:
         lines.append(f"  {detail_line}")
@@ -72,13 +89,13 @@ def format_charter(rec: dict[str, Any] | None, df_number: str | int) -> str:
         return f"No charter DF {df_number} in the Diplomatarium Fennicum corpus. Valid DF numbers in this snapshot run from 1 to 6888 (with gaps)."
 
     lines = [
-        f"**DF {rec.get('df', df_number)}** — {_dating(rec)} — {_place(rec)}",
+        f"**DF {_oneline(str(rec.get('df', df_number)))}** — {_dating(rec)} — {_place(rec)}",
         "",
     ]
     if rec.get("language"):
-        lines.append(f"Language: {rec['language']}")
+        lines.append(f"Language: {_oneline(rec['language'])}")
     if rec.get("indexterm"):
-        lines.append(f"Index term: {rec['indexterm']}")
+        lines.append(f"Index term: {_oneline(rec['indexterm'])}")
     if rec.get("lat") is not None and rec.get("lng") is not None:
         # These locate the place of issue, not the events described.
         lines.append(f"Coordinates of the place of issue: {rec['lat']}, {rec['lng']}")
