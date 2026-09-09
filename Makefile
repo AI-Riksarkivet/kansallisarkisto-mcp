@@ -57,6 +57,7 @@ test-mcp:
 ci:
 	dagger call checks
 	dagger call test
+	dagger call test-mcp
 
 # Run the image on the Dagger engine with the test fixture already ingested,
 # exposed on the host for manual poking
