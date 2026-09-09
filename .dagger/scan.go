@@ -128,14 +128,18 @@ func (m *KansallisarkistoMcp) ScanSarif(
 	trivyContainer := dag.Container().
 		From("aquasec/trivy:latest").
 		WithMountedFile("/image.tar", tarFile).
+		// /output does not exist in the trivy image, and trivy will not create
+		// it: without this the run ends in "failed to create output file". The
+		// SBOM functions always had this line; this one did not, and nothing
+		// executed it until the Security workflow started calling it.
+		WithExec([]string{"mkdir", "-p", "/output"}).
 		WithExec([]string{
 			"trivy",
 			"image",
 			"--input", "/image.tar",
 			"--format", "sarif",
 			"--output", "/output/" + outputPath,
-		}).
-		WithExec([]string{"cat", "/output/" + outputPath})
+		})
 
 	return trivyContainer.File("/output/" + outputPath), nil
 }
