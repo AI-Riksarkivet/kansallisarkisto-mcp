@@ -15,6 +15,7 @@
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 [![Data: Kansallisarkisto](https://img.shields.io/badge/data-Kansallisarkisto-8A2BE2.svg)](https://sisaltohaku.demo.kansallisarkisto.fi/)
 
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/AI-Riksarkivet/kansallisarkisto-mcp/badge)](https://scorecard.dev/viewer/?uri=github.com/AI-Riksarkivet/kansallisarkisto-mcp)
 [![SLSA Level 3](https://img.shields.io/badge/SLSA-Level%203-blue.svg)](docs/development/security.md#slsa-build-level-3-provenance)
 [![Signed with Sigstore](https://img.shields.io/badge/Sigstore-signed-purple.svg)](docs/development/security.md#supply-chain-attestations-at-publish-time)
 [![SBOM SPDX + CycloneDX](https://img.shields.io/badge/SBOM-SPDX%20%2B%20CycloneDX-green.svg)](docs/development/security.md#sbom-generation)
