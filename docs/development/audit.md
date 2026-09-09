@@ -4,6 +4,263 @@ icon: lucide/clipboard-check
 
 # Code Audit
 
+Two full reads of the codebase, newest first. Each read every source file, test, script,
+Dagger function, workflow and doc page, and checked the behavioural claims by running them.
+
+---
+
+## Second audit — commit `8c61270`
+
+Baseline: **194 tests passing, 7 skipped** (the corpus-only ones) in 10 s on Python 3.14.7;
+`ruff check`, `ruff format --check` and `ty check` clean; `uv lock --check` clean;
+`pip-audit --strict` over the exported third-party set reports no known vulnerabilities. On
+GitHub, the Tests, CodeQL and Security workflows are green on `main`, and there are no open
+pull requests or issues.
+
+Every finding from the first audit that was marked resolved was re-checked. All of them
+hold, with one exception recorded as finding 9 below.
+
+### What holds up
+
+**The substring filters cannot break out of their predicate either.** The first audit
+tested injection through `language`, which is an `equals`. This one ran ten payloads through
+`issuingplace` and `country`, which go through `text_contains` and LIKE — `' OR 1=1 --`,
+`Åbo') OR (1=1`, `x' OR lower(issuingplace) LIKE '%`, and the wildcard cases `%`, `_`, `\`,
+`\%`, `%'%`. Every one returned 0 hits against a 7-hit unfiltered baseline, i.e. it was
+matched as a literal string. The `ESCAPE '\'` clause is honoured by the engine: a bare `%`
+matches nothing rather than everything.
+
+**Model-shaped input does not raise.** `""`, `"`, `" "`, a 5,000-character keyword, a phrase
+mixed with a loose term, a keyword with a newline — all answered, none escaped. Together
+with the `_answer` wrapper this means nothing reaches the client as a protocol error.
+
+**The lock, the audit and the pins.** The lockfile is current, no locked dependency has a
+known advisory today, every action is SHA-pinned, the base image and the uv binary are
+digest-pinned, and the auto-merge job is scoped to the two permissions it needs.
+
+**The first-audit fixes are real.** Out-of-range DF numbers return `None`, fuzzy on a quoted
+phrase is refused with a sentence, a lancedb `ValueError` is folded into the generic reply,
+the FTS configuration is asserted against the index actually built, and the bounded
+telemetry shutdown is pinned.
+
+### Findings
+
+#### 1. `/ready` reports ready forever after its first success, and does not run the probe the docs describe
+
+Verified on the fixture: ingest a table, call `readiness()` → `(True, 'df')`. Delete the
+table directory. `readiness()` → still `(True, 'df')`, while a search now raises
+`Table 'df' was not found`. Only resetting the cached facade makes the probe notice.
+
+`readiness()` goes through `get_search()`, whose whole job is to build the `DfSearch` facade
+once and cache it. That is right for the tools and wrong for a probe, because a probe is
+asked *repeatedly* precisely so that it can change its answer. And `get_search()` never runs
+a query — it lists table names, which the first audit's finding 4 and `probe_table_readable`
+both explain is the one check that stays green in the case that bites hardest: lance's
+mode-0600 files owned by the wrong uid, where the manifest reads fine and every search fails.
+
+The documentation says otherwise. `deployment.md`: "It runs the same one-row probe as the
+boot check, because listing table names only reads the manifest". The resolved-box under
+finding 4 below: "running the same one-row probe as the boot check rather than trusting a
+table listing". `observability.md` describes the code as it is ("goes through the same
+`get_search()`") — so the three pages disagree, and the two that promise the probe are the
+ones an operator would read when wiring a readiness check.
+
+The fix is small: have `readiness()` run the one-row `PROBE_KEYWORD` search on every call
+(it is a few milliseconds on a mounted table), and drop the cached facade when it fails so a
+late-arriving mount is picked up. Then the prose is true.
+
+#### 2. `/ready` returns exception text to an unauthenticated caller
+
+With `KA_LANCEDB_URI` pointed at a regular file:
+
+```
+GET /ready -> 503 {"status": "not ready", "reason": "FileExistsError: [Errno 17] File exists: '/tmp/…/nope.txt'"}
+```
+
+`readiness()` formats the fallback branch as `f"{type(exc).__name__}: {exc}"`. The tools
+deliberately keep only the type (`format_error`, and the first audit's finding 12 is about
+exactly this class of leak); the probe is a plain HTTP route on the same listener and gets no
+such treatment. The message should go to the log and the type to the response.
+
+#### 3. CI cannot fail on formatting or fixable lint
+
+`.dagger/checks.go`, `Checks`: step 1 runs `ruff format .`, step 2 runs `ruff check --fix .`,
+and only then step 3 runs `ruff format --check` and `ruff check`. Inside the container the
+files have just been formatted and fixed, so the two checks can only pass. A push with
+unformatted code, or with a lint error ruff can auto-fix, goes green — and the fix stays in
+the container, so `main` carries the drift. Only `ty` and unfixable lint errors gate.
+`make check` has the same shape locally, which is fine for a developer target and is presumably
+where the CI version was copied from.
+
+Both tools also run as `uvx ruff` / `uvx ty`, i.e. whatever is latest on the day. A ruff
+release that changes a formatting rule changes what CI "verifies" without a commit, and the
+`ruff` in `uv.lock` (which `make format` uses) may disagree with it. Verify-only in CI, and
+run the locked ruff, and this is closed.
+
+#### 4. A `workflow_dispatch` can overwrite a released image tag
+
+`publish.yml` on dispatch computes `TAG=v$(version from pyproject)` and pushes
+`riksarkivet/kansallisarkisto-mcp:${TAG}`. After `v0.1.0` has been released, any dispatch
+from a commit whose `pyproject.toml` still reads `0.1.0` — every commit until the next bump —
+re-pushes `:v0.1.0` with different content, signs it, and hands the new digest to the SLSA
+job, which attests it. The first audit's 5b closed the `:latest` half of this and left the
+version tag open. The Dockerfile's own comment says digest-pinned bases exist "so versioned
+image tags (vX.Y.Z) cannot drift on rebuild"; this path drifts them from the other side.
+
+A dispatch should push a tag that cannot collide with a release — `sha-<short>` or
+`v0.1.0-dev.<run_number>` — or the workflow should refuse to push a version tag that already
+exists in the registry.
+
+#### 5. Dependabot auto-merge will rarely fire for Python
+
+`dependabot.yml` groups every pip update into `python-packages`. A grouped pull request is
+titled "Bump the python-packages group … with N updates", which has no `from X to Y`, so the
+auto-merge script's parser finds nothing and leaves it for review — as its own comment says
+it will. Only a group that happens to contain a single package keeps the parseable title.
+The docker, github-actions and gomod ecosystems are ungrouped and do merge. `SECURITY.md`
+("patch and minor bumps merge automatically once tests pass") and the workflow header
+promise more than this delivers for the ecosystem with the most updates.
+
+Two options: drop the group so each Python bump is its own PR, or read the bump range from
+the PR body (Dependabot lists each package there) instead of the title.
+
+Related, and worth knowing rather than fixing: the merge gate is the Tests workflow alone.
+The Security workflow's Trivy gate runs *after* merge, on push to `main`, and only when the
+lockfile or image changed — so a bump that introduces a fixable CVE is merged first and
+flagged second.
+
+#### 6. One out-of-range DF number aborts the whole ingest
+
+A line with `"df": "99999999999"` — numeric, so `from_json` sets `df_number` — raises
+`ArrowInvalid: Value 99999999999 too large to fit in C integer type` from
+`RecordBatch.from_pylist`, which is outside the per-line guard, and the run stops with a
+half-built table. The per-line skip that `_df_batches` promises covers parse errors only.
+The corpus has no such value today, but the whole point of that guard is that the harvest is
+re-runnable and the sibling corpora differ. `get_charter` already range-checks against
+`int32`; `from_json` should do the same and store `None`.
+
+A smaller cousin: `df.isdigit()` is true for `"²"`, and `int("²")` then raises, so a charter
+whose `df` field carried a superscript would be *skipped entirely* over a cosmetic field
+rather than kept with `df_number=None`. `isdecimal()` is the test that matches `int()`.
+
+#### 7. The CI and release tooling runs on floating image tags
+
+The production image is digest-pinned; the containers that test and release it are not:
+
+| where | image |
+|---|---|
+| `main.go` `withUv`, `test.go` | `ghcr.io/astral-sh/uv:latest` |
+| `main.go` `buildWithUv`, `test.go` | `python:3.14-slim` (no digest) |
+| `scan.go` | `aquasec/trivy:latest` |
+| `serve.go` | `curlimages/curl:latest` |
+| `scan.go` `ExtractProvenanceAttestation` | `alpine:latest` + `apk add jq`, `crane:latest` |
+| every workflow | `dagger-for-github` with `version: "latest"` |
+
+Two consequences. The test suite runs on whichever `python:3.14-slim` is current, which is
+not necessarily the digest the image ships — the README's "runs on the same libc the tests
+ran on" is true of the distribution, not the build. And the release path itself
+(`extract-provenance-attestation`) pulls two unpinned images and installs a package from
+Alpine's repository at release time. Scorecard does not see any of it — it does not parse a
+Go Dagger module — so its Pinned-Dependencies score of 9/10 on the latest green run counts
+"1 out of 1 container image pinned" and overstates the position. Digest-pin the ones in the
+release path first; the rest can follow via Dependabot only if they move into a Dockerfile
+it parses, so they need a note in `docs/development/security.md` either way.
+
+#### 8. `dataset.py` says it has no telemetry
+
+The module docstring: "Ported from ra-mcp's `ra_mcp_dataset_lib`, with its OpenTelemetry
+layer left out: this server, like ape-mcp, has no telemetry stack." Forty lines later the
+module creates a tracer, a meter, three counters and two histograms. In a codebase where the
+prose is load-bearing this is the sentence a reader meets first.
+
+#### 9. Documentation drift, second round
+
+- **`docs/development/index.md`** — the Makefile table does not list `harvest`,
+  `verify-data`, `scan` or `sbom`. The first audit's finding 10 is marked resolved with
+  "the Makefile table covers `harvest` and `verify-data`"; it does not. The repo-layout
+  block does list `harvest.py`, which is the half that was done.
+- **`docs/development/index.md`** — "`make ci` runs exactly what `.github/workflows/ci.yml`
+  runs". `ci.yml` also runs `test-server`; the `ci` Make target does not.
+- **`docs/development/deployment.md`** — the not-ready example shows a `"table": "df"` key
+  the response does not carry.
+- **`docs/api/index.md`** — lists three URI-resolution steps; the code and the `config`
+  docstring have four (the last falls back to `<root>/data` even when it does not exist).
+- **27 vs 28** compound-language charters: `search-tips.md` says 27, the `df_search` field
+  description says 28.
+- **`SECURITY.md`** — "Trivy scans the published image weekly". It scans a fresh build of
+  the current Dockerfile; the published image is checked only by `test-published`, and only
+  for `/health`.
+- **Finding 11 below** still lists `HOST`, `PORT` and `LOG_LEVEL` as unprefixed, and they
+  still are. Carried, not re-argued.
+
+#### 10. The Python pin resolved to a release candidate
+
+`.python-version` says `3.14`. On a machine whose `uv` predates the 3.14.0 final release,
+that resolves to `3.14.0rc2`, and there `import lancedb` fails at collection time inside
+pydantic: `_eval_type() got an unexpected keyword argument 'prefer_fwd_module'`. That is
+what this audit hit first; the 194-passing baseline above is on 3.14.7 after installing a
+current uv. Not a code defect, but `3.14.7` in `.python-version` (or a note in the setup
+page) spares the next person the detour. The Dagger containers are not affected — they pull
+`python:3.14-slim`, which is a final release — so CI never saw it.
+
+#### 11. Smaller things
+
+- **`get_charter` truncates floats and accepts booleans.** `int(1.5)` is 1 and `int(True)`
+  is 1, so both return DF 1. Unreachable through the MCP tool, which types the argument as
+  `int`; reachable through the library, which the docs say is usable on its own.
+- **`keyword="df"` matches every charter**, because the citation `df <number>` is in every
+  record's search text. By design, and harmless with `match_all=True`, but a model that
+  includes the word `DF` in a `match_all=False` search gets the whole corpus.
+- **`harvest.py` writes `checkpoint.json` non-atomically**, so a crash mid-write leaves a
+  file the next `--resume` cannot parse. Write to a sibling and rename.
+- **`scripts/ingest_df.py` does `Path(resolve_lancedb_uri()).mkdir()`**, so an `s3://`
+  override creates a local directory named `s3:` before lancedb sees the URI.
+- **`publish.yml` runs `test` and `scan-ci` but not `checks`**, so pip-audit does not gate a
+  release. Trivy does scan the Python packages in the image, which is why this is minor.
+- **`trufflehog.yml` triggers on both `push` and `pull_request`**, so a same-repo PR is
+  scanned twice per push.
+- **The latest Scorecard run on `main` failed** with a GitHub-side GraphQL error
+  (`ListCommits … Something went wrong while executing your query`). The run before it
+  passed and published a score of **6.3**; nothing in the repository caused the failure.
+- **`main` has no branch protection**, and Scorecard scores Branch-Protection and
+  Code-Review at 0 for it (0 of the last 30 changesets reviewed). The auto-merge workflow's
+  header already says so, and it is why that workflow gates on a completed run rather than
+  on required checks. Everything above about what CI does or does not catch is bounded by
+  this: nothing stops a direct push to `main` that skips CI altogether.
+- **HTTP transport has no authentication and no host validation.** FastMCP's
+  `http_host_origin_protection` defaults to off, the server trusts every proxy header
+  (`forwarded_allow_ips="*"`), each search materialises up to 10,000 rows, and keyword length
+  is unbounded. All of it is acceptable for stdio and for a container behind a proxy, which
+  is the documented deployment; it is the list of things to settle before a hosted endpoint
+  exists.
+
+### Behaviour confirmed as correct
+
+| checked | result |
+|---|---|
+| Wildcards and quotes through `issuingplace` / `country` | `%`, `_`, `\`, `\%`, `%'%` and five injection strings all match as literals: 0 hits each |
+| Degenerate keywords | `""`, `"`, `" "`, 5,000 × `a`, `konung\nÅbo` — answered, no exception |
+| Phrase mixed with a loose term | `'"Åbo" konung'` routes to the parser and returns 7 |
+| `get_charter(" 1031 ")`, `("1_031")` | both 1031 — `int()` semantics, as documented |
+| `get_charter("1031.0")`, `("0x40f")` | `None`, as documented |
+| A `²` in the `df` field | logged and skipped as a bad line, ingest completes with 18 rows |
+| `pip-audit --strict` on the exported lock | no known vulnerabilities |
+| `uv lock --check` | current |
+
+### Suggested order of work
+
+1. **Finding 1** — a real probe in `readiness()`, then the three pages agree.
+2. **Finding 4** — a non-colliding tag for dispatch runs; one line in `publish.yml`.
+3. **Finding 3** — verify-only in the CI `Checks`, on the locked ruff.
+4. **Finding 2** — type-only in the `/ready` fallback.
+5. **Findings 8, 9, 10** — text, and the `.python-version` pin.
+6. **Finding 6** — the int32 guard in `from_json`, with a test line in `test_ingest.py`.
+7. **Findings 5, 7** — process; decide, then either fix or document the limit.
+
+---
+
+## First audit — commit `c81ffa4`
+
 A full read of the codebase at commit `c81ffa4` — every source file, test, script, Dagger
 function, workflow and doc page — with the behavioural claims checked by running them rather
 than by reading them.
