@@ -1,0 +1,130 @@
+"""Pydantic models for the Sisältöhaku corpora.
+
+Only ``df`` (Diplomatarium Fennicum) is modelled so far; ``voudintilit`` and
+``tuomiokirjat`` follow the same shape and will land beside it.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict
+
+# A year field of 0 in the source means "unknown", not year 0. Left as a literal 0
+# it silently pollutes every date range — 6,843 of the 6,876 df records carry
+# dating_end_year == 0 — so it is normalised to None on the way in.
+UNKNOWN_YEAR = 0
+
+
+def _clean(value: Any) -> str:
+    """Coerce a source value to a stripped string; None becomes ""."""
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def _year(value: Any) -> int | None:
+    """Coerce a source year to int, mapping the sentinel 0 (and blanks) to None."""
+    if value in (None, "", UNKNOWN_YEAR):
+        return None
+    try:
+        year = int(value)
+    except (TypeError, ValueError):
+        return None
+    return None if year == UNKNOWN_YEAR else year
+
+
+class DfRecord(BaseModel):
+    """One Diplomatarium Fennicum charter — a medieval document concerning Finland.
+
+    Field names follow the source JSON, so a record can be traced back to the
+    Sisältöhaku export line it came from. Four columns are derived and carry no
+    source counterpart: ``df_number``, ``year_from`` / ``year_to`` and
+    ``searchable_text``; each is documented at the point it is built.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    object_id: str
+    df: str = ""
+    # Derived: `df` is the citable charter number and is numeric for all 6,876
+    # records, but as a string "10" sorts before "2". The int form is what a
+    # range filter or an ordering can use; the string stays authoritative for
+    # citation.
+    df_number: int | None = None
+    transcript: str = ""
+    indexterm: str = ""
+    issuingplace: str = ""
+    issuingplacecountry: str = ""
+    language: str = ""
+    dating_start_year: int | None = None
+    dating_end_year: int | None = None
+    # Derived: the dating interval with the unknowns closed, so a date filter is a
+    # plain two-column overlap test (`year_from <= max AND year_to >= min`)
+    # instead of a COALESCE over nullable columns. A charter dated to a single
+    # year has year_from == year_to. Both are None only when the source gives no
+    # start year at all (22 records).
+    year_from: int | None = None
+    year_to: int | None = None
+    lat: float | None = None
+    lng: float | None = None
+
+    @classmethod
+    def from_json(cls, row: dict[str, Any]) -> DfRecord:
+        """Build a record from one line of ``df.jsonl.gz``.
+
+        ``_geoloc`` is flattened to ``lat`` / ``lng``: the source nests them and
+        sets both to null together (never one alone) for the 2,734 unlocated
+        charters, which flat nullable columns represent exactly while being
+        filterable.
+
+        Every field is read defensively. The ingest reports a bad line by raising
+        ``ValueError``/``TypeError`` and skipping it, so anything this method can
+        raise outside those two — an ``AttributeError`` from a ``_geoloc`` that is
+        a string rather than an object, say — would abort a 7.8M-line run over a
+        single malformed record instead.
+        """
+        raw_geo = row.get("_geoloc")
+        geo = raw_geo if isinstance(raw_geo, dict) else {}
+        start = _year(row.get("dating_start_year"))
+        end = _year(row.get("dating_end_year"))
+        df = _clean(row.get("df"))
+
+        return cls(
+            object_id=_clean(row.get("objectID")),
+            df=df,
+            df_number=int(df) if df.isdigit() else None,
+            transcript=_clean(row.get("transcript")),
+            indexterm=_clean(row.get("indexterm")),
+            issuingplace=_clean(row.get("issuingplace")),
+            issuingplacecountry=_clean(row.get("issuingplacecountry")),
+            language=_clean(row.get("language")),
+            dating_start_year=start,
+            dating_end_year=end,
+            # An absent end year means the charter is dated to its start year, not
+            # that it extends indefinitely; an absent start year with a known end
+            # is treated symmetrically.
+            year_from=start if start is not None else end,
+            year_to=end if end is not None else start,
+            lat=geo.get("lat"),
+            lng=geo.get("lng"),
+        )
+
+    @property
+    def searchable_text(self) -> str:
+        """The text the full-text index is built over.
+
+        Deliberately more than the transcript: 2,464 of the 6,876 df records
+        (36%) are catalogued but untranscribed, and an index over ``transcript``
+        alone would make them unreachable by search even though they are perfectly
+        findable by place, index term or language. Folding the catalogue fields in
+        keeps them in the result set.
+        """
+        parts = [
+            self.transcript,
+            self.issuingplace,
+            self.issuingplacecountry,
+            self.indexterm,
+            self.language,
+        ]
+        return " ".join(p for p in parts if p)
