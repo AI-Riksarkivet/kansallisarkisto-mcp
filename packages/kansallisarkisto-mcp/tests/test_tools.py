@@ -113,3 +113,23 @@ async def test_tool_handlers_are_sync_so_they_do_not_block_the_event_loop(name):
     tool = await tools.kansallisarkisto_mcp.get_tool(name)
     assert isinstance(tool, FunctionTool)
     assert not inspect.iscoroutinefunction(tool.fn), f"{name} must be a sync def"
+
+
+async def test_caller_correctable_errors_keep_their_message(df_search):
+    """A SearchInputError is written for the caller, so its sentence is the reply."""
+    tools._search = df_search
+    out = await call("df_search", {"keyword": '"de ecclesia"', "fuzzy": 1})
+    assert out.startswith("Error: fuzzy=1 cannot be combined with a quoted phrase")
+
+
+async def test_a_lancedb_valueerror_does_not_reach_the_client(df_search):
+    """lancedb raises ValueError too, and its messages quote dataset paths and
+    internal query structure. Catching the base class rather than
+    SearchInputError handed those straight to a public HTTP client — an
+    out-of-int32 year_min was enough to leak the filter expression.
+    """
+    tools._search = df_search
+    out = await call("df_search", {"keyword": "Åbo", "year_min": 10**20})
+    assert out.startswith("Error: the search failed with an internal ")
+    assert "year_to >=" not in out
+    assert "Float64" not in out

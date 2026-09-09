@@ -15,7 +15,7 @@ func healthCheckCmd(host string, port int) []string {
 	)}
 }
 
-// fixtureData ingests the 16-charter test fixture into a LanceDB database and
+// fixtureData ingests the 18-charter test fixture into a LanceDB database and
 // returns it as a directory, so the image can be exercised against a real table
 // without shipping (or harvesting) the corpus.
 func (m *KansallisarkistoMcp) fixtureData(ctx context.Context, source *dagger.Directory) (*dagger.Directory, error) {

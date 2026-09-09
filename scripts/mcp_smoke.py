@@ -1,6 +1,6 @@
 """End-to-end MCP smoke test: real client, real server, real LanceDB table.
 
-Run by `dagger call test-mcp` against the production image with the 16-charter
+Run by `dagger call test-mcp` against the production image with the 18-charter
 test fixture ingested into a table mounted at /data. Exercises the full stack —
 image entrypoint, streamable-HTTP transport, tool dispatch, LanceDB full-text
 search, formatter — offline.

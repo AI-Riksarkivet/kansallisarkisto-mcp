@@ -156,3 +156,24 @@ def test_total_is_flagged_when_it_hits_the_cap(search, monkeypatch):
 
 def test_total_is_not_flagged_below_the_cap(search):
     assert search.search("Åbo", limit=1).total_is_capped is False
+
+
+def test_input_guards_raise_search_input_error(search):
+    """The MCP layer returns these messages verbatim, so they must be
+    distinguishable from an arbitrary ValueError out of lancedb."""
+    from ra_mcp_kansallisarkisto_lib.dataset import SearchInputError
+
+    for kwargs in ({"keyword": ""}, {"keyword": "Åbo", "offset": -1}, {"keyword": "Åbo", "limit": 0}, {"keyword": '"de ecclesia"', "fuzzy": 1}):
+        keyword = kwargs.pop("keyword")
+        with pytest.raises(SearchInputError):
+            search.search(keyword, **kwargs)
+
+
+def test_a_lancedb_error_is_not_a_search_input_error(search):
+    """An out-of-int32 bound is rejected by lancedb, not by our guards — so it
+    must NOT arrive as the type whose message the MCP layer shows the caller."""
+    from ra_mcp_kansallisarkisto_lib.dataset import SearchInputError
+
+    with pytest.raises(ValueError) as excinfo:
+        search.search("Åbo", year_min=10**20)
+    assert not isinstance(excinfo.value, SearchInputError)

@@ -198,7 +198,7 @@ def test_match_all_false_widens(search):
 @pytest.mark.parametrize("operator", ["OR", "AND", "NOT"])
 def test_boolean_words_are_not_operators(search, operator):
     """They are matched as ordinary words, so the tool descriptions must never
-    suggest them: writing "OR" once pulled in 50 charters containing "or"."""
+    suggest them: writing "OR" once pulled in the 51 charters containing "or"."""
     plain = search.search("Åbo Suomi", match_all=False).total_hits
     with_word = search.search(f"Åbo {operator} Suomi", match_all=False).total_hits
     assert with_word >= plain, "if this ever behaves as an operator, revisit the tool guidance"
@@ -213,7 +213,7 @@ def test_a_quoted_phrase_still_works_with_match_all(search):
 # --- spelling variation, the corpus's largest recall problem ------------------
 
 
-def test_fuzzy_is_opt_in_so_stemming_keeps_working(search):
+def test_fuzzy_is_opt_in_so_stemming_keeps_working():
     """The engine makes fuzzy and stemming mutually exclusive: a fuzzy term skips
     the analysis pipeline and is matched raw against stemmed index terms. On the
     full corpus "konungen" collapses from 279 hits to 6 with fuzzy=1, which is

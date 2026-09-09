@@ -9,7 +9,7 @@ from ra_mcp_kansallisarkisto_lib.ingest import ingest_df
 from ra_mcp_kansallisarkisto_lib.search_operations import DfSearch
 
 FIXTURES = Path(__file__).parent / "fixtures"
-# 16 real Diplomatarium Fennicum records, chosen to cover the traps the corpus
+# 18 real Diplomatarium Fennicum records, chosen to cover the traps the corpus
 # README documents: untranscribed charters, unknown years (0), unlocated places
 # (null coordinates), open-ended and closed dating intervals, and all four main
 # languages.

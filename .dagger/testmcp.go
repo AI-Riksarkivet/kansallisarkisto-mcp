@@ -7,7 +7,7 @@ import (
 )
 
 // TestMcp runs the end-to-end MCP smoke test: the production image serving a
-// real LanceDB table built from the 16-charter test fixture, with a real fastmcp
+// real LanceDB table built from the 18-charter test fixture, with a real fastmcp
 // client (scripts/mcp_smoke.py) listing and calling both tools.
 //
 // It is the only place the index configuration is actually verified end to end:

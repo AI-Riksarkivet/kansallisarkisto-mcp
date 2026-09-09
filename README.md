@@ -86,11 +86,6 @@ MCP client ──/mcp──▶ ra_mcp_kansallisarkisto_mcp (FastMCP tools + form
                                └─▶ data/df (LanceDB table, built from the harvested export)
 ```
 
-- `packages/kansallisarkisto-lib` — the LanceDB spine (`dataset.py`), the record model,
-  ingest, and search operations. No MCP dependency.
-- `packages/kansallisarkisto-mcp` — FastMCP tools, LLM-facing descriptions, env settings,
-  server entry point.
-
 A uv workspace of two packages:
 
 - `packages/kansallisarkisto-lib` — the LanceDB spine (`dataset.py`), the record model,
@@ -137,7 +132,7 @@ make test-mcp  # end-to-end: production image + fixture table + real MCP client 
 make ci        # the full pipeline GitHub Actions runs
 ```
 
-`packages/kansallisarkisto-lib/tests/fixtures/df_sample.jsonl` holds 16 real charters chosen
+`packages/kansallisarkisto-lib/tests/fixtures/df_sample.jsonl` holds 18 real charters chosen
 to cover the corpus's documented traps — untranscribed records, unknown years, unlocated
 places, open and closed dating intervals, all four main languages — so the whole suite runs
 without the 6.3 GB export.
