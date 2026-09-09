@@ -1,0 +1,79 @@
+name: Dependabot auto-merge
+
+# Merges Dependabot patch and minor bumps once the test suite has actually gone
+# green, so the security-alert backlog stops accumulating. Major bumps are left
+# for a person: they are where the breaking change lives.
+#
+# The obvious implementation — `pull_request` trigger plus `gh pr merge --auto` —
+# does not work on this repository, and would fail quietly in the worse direction:
+# auto-merge is disabled here (`allow_auto_merge: false`), and `main` has no
+# branch protection. GitHub's auto-merge waits for *required* status checks, so
+# with none required it merges immediately. That is the opposite of the intent.
+#
+# Triggering on the Tests run completing instead means the gate is the thing that
+# actually ran, not a repository setting that might not be configured. The job
+# never checks out the pull request's code — it only calls the API — so running
+# with write permission is safe.
+on:
+  workflow_run:
+    workflows: ["Tests"]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    name: Merge green Dependabot bumps
+    runs-on: ubuntu-latest
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.actor.login == 'dependabot[bot]'
+    steps:
+      - name: Merge if the bump is patch or minor
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+
+          # workflow_run carries the PR for same-repo branches, which is what
+          # Dependabot creates; fall back to a head-SHA lookup rather than assume.
+          pr=$(gh api "repos/$REPO/commits/$HEAD_SHA/pulls" --jq '.[0].number // empty')
+          if [ -z "$pr" ]; then
+            echo "No pull request for $HEAD_SHA; nothing to merge."
+            exit 0
+          fi
+
+          read -r author title state < <(gh pr view "$pr" --repo "$REPO" \
+            --json author,title,state --jq '[.author.login, .title, .state] | @tsv')
+
+          if [ "$author" != "app/dependabot" ] && [ "$author" != "dependabot[bot]" ]; then
+            echo "PR #$pr is by $author, not Dependabot. Leaving it alone."
+            exit 0
+          fi
+          if [ "$state" != "OPEN" ]; then
+            echo "PR #$pr is $state."
+            exit 0
+          fi
+
+          # Dependabot titles read "... bump <dep> from 1.2.3 to 1.3.0". Comparing
+          # the major components is enough to tell a major bump from the rest, and
+          # avoids fetch-metadata, which only works on a pull_request trigger.
+          from=$(sed -nE 's/.* from ([0-9]+)\.[0-9.]+ to .*/\1/p' <<<"$title")
+          to=$(sed -nE 's/.* to ([0-9]+)\.[0-9.]+.*/\1/p' <<<"$title")
+          if [ -z "$from" ] || [ -z "$to" ]; then
+            echo "Could not read a version bump from: $title"
+            echo "Leaving PR #$pr for review."
+            exit 0
+          fi
+          if [ "$from" != "$to" ]; then
+            echo "PR #$pr is a major bump ($from.x -> $to.x). Leaving it for review."
+            exit 0
+          fi
+
+          echo "PR #$pr is a patch/minor bump and Tests passed. Merging."
+          gh pr merge "$pr" --repo "$REPO" --squash --delete-branch
