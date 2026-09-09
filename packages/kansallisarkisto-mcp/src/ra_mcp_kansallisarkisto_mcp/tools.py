@@ -26,6 +26,9 @@ kansallisarkisto_mcp: FastMCP = FastMCP(
         "WORKFLOW: (1) `df_search` with a source-language term, narrowing by issuingplace, "
         "language, country or a year range; paginate with offset. (2) `df_get_charter` with the DF "
         "number from a hit to read the full transcript. "
+        'Several words in a keyword must all appear, and a "quoted phrase" must appear exactly. '
+        "AND, OR and NOT are not operators — they are searched for as ordinary words — so widen by "
+        "removing a word or passing match_all=false, never by writing OR. "
         "Cite the DF number — it is the identifier a researcher quotes and the only stable handle "
         "on a charter. Reply to the user in the user's own language, but reproduce DF numbers, "
         "place names and language labels verbatim: they are what the user cites and what you pass "

@@ -43,6 +43,10 @@ def register_df_tools(mcp: FastMCP, get_search) -> None:
             "untranscribed. Results carry the DF number, which is the citable identifier — always "
             "surface it, and pass it to df_get_charter for the full transcript. "
             "The text is machine-recognised, so check any quotation against the source. "
+            'QUERY SYNTAX: several words means all of them must appear; "quote a phrase" to '
+            "require the exact sequence. Do NOT write AND, OR or NOT — they are not operators "
+            "here and are matched as ordinary words, so 'bref OR littera' also drags in every "
+            "charter containing 'or'. To widen instead, drop a word or pass match_all=false. "
             "Example: df_search(keyword='konung', issuingplace='Åbo', year_min=1300, year_max=1400)."
         ),
     )
@@ -53,8 +57,9 @@ def register_df_tools(mcp: FastMCP, get_search) -> None:
                 description=(
                     "Search term, in the language of the documents (Swedish, Latin, German) and in "
                     "period spelling. Swedish stemming is applied, so 'konung' also matches 'konungen' "
-                    "and 'konungs'; accents are folded, so 'Abo' matches 'Åbo'. Supports boolean "
-                    "syntax: 'bref OR littera'."
+                    "and 'konungs'; accents are folded, so 'Abo' matches 'Åbo'. Several words require "
+                    'all of them; "quoted words" require that exact phrase. AND/OR/NOT are not '
+                    "operators and will be searched for literally."
                 )
             ),
         ],
@@ -80,6 +85,17 @@ def register_df_tools(mcp: FastMCP, get_search) -> None:
         ] = None,
         year_min: Annotated[int | None, Field(description="Earliest year the charter may fall in. Charters whose dating interval overlaps [year_min, year_max] are returned.")] = None,
         year_max: Annotated[int | None, Field(description="Latest year the charter may fall in.")] = None,
+        match_all: Annotated[
+            bool,
+            Field(
+                description=(
+                    "Require every word of the keyword (default). Set false to match any word, which "
+                    "widens the search when a term may be spelled differently — but the total then "
+                    "counts charters matching only one word, so read it as a ceiling rather than a "
+                    "count of relevant results."
+                )
+            ),
+        ] = True,
     ) -> str:
         if err := require_keyword(keyword, "'konung' or 'littera'"):
             return err
@@ -95,6 +111,7 @@ def register_df_tools(mcp: FastMCP, get_search) -> None:
                 country=country,
                 year_min=year_min,
                 year_max=year_max,
+                match_all=match_all,
             )
         except MissingTableError as exc:
             # A deployment state the operator can fix, so it is explained in full
