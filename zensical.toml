@@ -1,10 +1,10 @@
 [project]
 site_name = "kansallisarkisto-mcp"
 site_description = "MCP server over the Kansallisarkisto Sisältöhaku corpora — LanceDB full-text search across machine-transcribed Finnish archival records."
-site_author = "carpelan"
+site_author = "Riksarkivet"
 site_url = "https://ai-riksarkivet.github.io/kansallisarkisto-mcp/"
 copyright = """
-Copyright &copy; 2026 carpelan
+Copyright &copy; 2026 Riksarkivet
 """
 repo_url = "https://github.com/AI-Riksarkivet/kansallisarkisto-mcp"
 repo_name = "AI-Riksarkivet/kansallisarkisto-mcp"
