@@ -10,5 +10,8 @@ __pycache__/
 data/
 .env
 site/
+# Build output from `make sbom` / `make scan`
+sbom.*.json
+trivy-results.sarif
 # zensical's incremental build cache, written next to zensical.toml
 .cache/

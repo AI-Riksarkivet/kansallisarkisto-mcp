@@ -1,4 +1,4 @@
-.PHONY: install harvest verify-data ingest-df serve serve-http inspect format lint typecheck check test test-mcp ci clean
+.PHONY: install harvest verify-data ingest-df scan sbom serve serve-http inspect format lint typecheck check test test-mcp ci clean
 
 # Install dependencies (all workspace packages + dev group)
 install:
@@ -47,6 +47,15 @@ check: format lint typecheck
 # Run tests
 test:
 	uv run pytest
+
+# Scan the production image with Trivy (fixable CRITICAL/HIGH gate, as CI runs it)
+scan:
+	dagger call scan
+
+# Write both SBOM formats next to the repo
+sbom:
+	dagger call generate-sbom-spdx export --path ./sbom.spdx.json
+	dagger call generate-sbom-cyclone-dx export --path ./sbom.cyclonedx.json
 
 # End-to-end MCP smoke test: production image + the test fixture ingested into a
 # mounted LanceDB table (offline)
