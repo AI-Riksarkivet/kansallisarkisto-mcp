@@ -20,15 +20,27 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Determine version tag
+      - name: Determine version and image tags
         id: version
         run: |
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+            TAG="${GITHUB_REF#refs/tags/}"
           else
             VERSION=$(grep '^version' packages/kansallisarkisto-mcp/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
-            echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+            TAG="v${VERSION}"
           fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          # Only a tagged release may move :latest. A workflow_dispatch run skips
+          # the tag/version validation below, so letting it publish :latest would
+          # let an unvalidated build replace the image everyone pulls by default.
+          {
+            echo "tags<<TAGS_EOF"
+            echo "riksarkivet/kansallisarkisto-mcp:${TAG}"
+            if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+              echo "riksarkivet/kansallisarkisto-mcp:latest"
+            fi
+            echo "TAGS_EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Validate tag matches package version
         if: startsWith(github.ref, 'refs/tags/v')
@@ -50,6 +62,17 @@ jobs:
           cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
           version: "latest"
 
+      # Gate the release on the image scan, before anything is pushed. Trivy is
+      # run with --ignore-unfixed (see .dagger/scan.go), so this fails only on
+      # findings a rebuild or a dependency bump can actually clear.
+      - name: Scan image for vulnerabilities
+        uses: dagger/dagger-for-github@27b130bf0f79a7f6fbbbe0fbca6760dc9bb40a77 # v8.4.1
+        with:
+          verb: call
+          args: scan-ci
+          cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
+          version: "latest"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
@@ -66,9 +89,7 @@ jobs:
           context: .
           file: .docker/kansallisarkisto-mcp.dockerfile
           push: true
-          tags: |
-            riksarkivet/kansallisarkisto-mcp:${{ steps.version.outputs.tag }}
-            riksarkivet/kansallisarkisto-mcp:latest
+          tags: ${{ steps.version.outputs.tags }}
           platforms: linux/amd64
           sbom: true
           provenance: mode=max
@@ -111,7 +132,11 @@ jobs:
   provenance:
     name: Generate SLSA L3 provenance
     needs: [publish]
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Deliberately NOT gated on a tag ref: the publish job pushes an image on
+    # workflow_dispatch too, and an image that ships without provenance is
+    # exactly the gap this job exists to close. The release-asset steps above
+    # stay tag-gated because they attach to a GitHub release, which a dispatch
+    # run does not have.
     permissions:
       actions: read # read the workflow run when generating provenance
       id-token: write # keyless signing of the attestation
