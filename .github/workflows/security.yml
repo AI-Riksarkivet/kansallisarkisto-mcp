@@ -1,0 +1,103 @@
+name: Security
+
+# Image scanning and SBOM generation. Separate from Tests because it is driven by
+# time rather than by changes: the image is digest-pinned, so its CVE surface
+# moves when advisories are published, not when this repository is edited. A
+# weekly run is what actually catches that; PR runs stay fast.
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".docker/**"
+      - "uv.lock"
+      - "packages/*/pyproject.toml"
+      - ".dagger/**"
+      - ".github/workflows/security.yml"
+  schedule:
+    # Mondays 06:00 UTC, before the working week.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    name: Scan image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write # SARIF upload, once Code Security is enabled
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # The gate: fails on CRITICAL/HIGH findings that have a fix available. See
+      # docs/development/security.md for why --ignore-unfixed is the default.
+      - name: Trivy gate (fixable CRITICAL/HIGH)
+        uses: dagger/dagger-for-github@27b130bf0f79a7f6fbbbe0fbca6760dc9bb40a77 # v8.4.1
+        with:
+          verb: call
+          args: scan-ci
+          cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
+          version: "latest"
+
+      # The full picture, including the standing set of unfixed base-image CVEs
+      # that the gate deliberately ignores. Never fails the build; it is a report.
+      - name: Generate SARIF report
+        uses: dagger/dagger-for-github@27b130bf0f79a7f6fbbbe0fbca6760dc9bb40a77 # v8.4.1
+        with:
+          verb: call
+          args: "scan-sarif export --path ./trivy-results.sarif"
+          cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
+          version: "latest"
+
+      # Always available, and the only place the report lands while this
+      # repository is private without Code Security.
+      - name: Upload SARIF as a workflow artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: trivy-sarif
+          path: ./trivy-results.sarif
+          if-no-files-found: error
+
+      # The Security tab is where this belongs, but code scanning needs GitHub
+      # Code Security, which is off for this private repository — the API answers
+      # 403. continue-on-error keeps the job honest until it is enabled, at which
+      # point this step starts working with no other change.
+      - name: Upload SARIF to the Security tab
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
+        with:
+          sarif_file: ./trivy-results.sarif
+          category: trivy-image
+
+  sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: SPDX
+        uses: dagger/dagger-for-github@27b130bf0f79a7f6fbbbe0fbca6760dc9bb40a77 # v8.4.1
+        with:
+          verb: call
+          args: "generate-sbom-spdx export --path ./sbom.spdx.json"
+          cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
+          version: "latest"
+
+      - name: CycloneDX
+        uses: dagger/dagger-for-github@27b130bf0f79a7f6fbbbe0fbca6760dc9bb40a77 # v8.4.1
+        with:
+          verb: call
+          args: "generate-sbom-cyclone-dx export --path ./sbom.cyclonedx.json"
+          cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
+          version: "latest"
+
+      - name: Upload SBOMs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sbom
+          path: |
+            ./sbom.spdx.json
+            ./sbom.cyclonedx.json
+          if-no-files-found: error
