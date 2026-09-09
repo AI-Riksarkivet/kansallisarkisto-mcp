@@ -2,7 +2,6 @@
 
 from ra_mcp_kansallisarkisto_lib.dataset import (
     SearchResult,
-    any_of,
     at_least,
     combine,
     equals,
@@ -27,9 +26,8 @@ def test_text_contains_lowercases_and_escapes_wildcards():
     assert "\\%" in text_contains("indexterm", "100%")
 
 
-def test_at_least_and_any_of():
+def test_at_least():
     assert at_least("year_to", 1400) == "year_to >= 1400"
-    assert any_of("a = 1", "b = 2") == "(a = 1 OR b = 2)"
 
 
 def test_combine_drops_unset_filters():

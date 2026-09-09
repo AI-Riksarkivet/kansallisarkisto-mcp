@@ -3,15 +3,12 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 
 import lancedb
 import pytest
 
 from ra_mcp_kansallisarkisto_lib.ingest import ingest_df
 from ra_mcp_kansallisarkisto_mcp import server
-
-DF_FIXTURE = Path(__file__).parents[2] / "kansallisarkisto-lib" / "tests" / "fixtures" / "df_sample.jsonl"
 
 
 class RunRecorder:
@@ -59,9 +56,9 @@ def test_unknown_transport_fails_loudly_instead_of_hanging_on_stdio(recorder, mo
     assert recorder.calls == []
 
 
-def test_present_table_is_reported_at_boot(caplog, monkeypatch, tmp_path):
+def test_present_table_is_reported_at_boot(caplog, monkeypatch, tmp_path, df_fixture):
     uri = str(tmp_path / "db")
-    ingest_df(lancedb.connect(uri), DF_FIXTURE)
+    ingest_df(lancedb.connect(uri), df_fixture)
     monkeypatch.setattr(server.settings, "ka_lancedb_uri", uri)
     with caplog.at_level(logging.INFO):
         server.log_table_status()
@@ -78,21 +75,21 @@ def test_missing_table_is_reported_at_boot(caplog, monkeypatch, tmp_path):
     assert uri in caplog.text
 
 
-def test_boot_probe_runs_a_real_query_on_a_healthy_table(caplog, monkeypatch, tmp_path):
+def test_boot_probe_runs_a_real_query_on_a_healthy_table(caplog, monkeypatch, tmp_path, df_fixture):
     """Listing table names only reads the manifest — the probe must touch the index."""
     uri = str(tmp_path / "db")
-    ingest_df(lancedb.connect(uri), DF_FIXTURE)
+    ingest_df(lancedb.connect(uri), df_fixture)
     monkeypatch.setattr(server.settings, "ka_lancedb_uri", uri)
     with caplog.at_level(logging.ERROR):
         server.log_table_status()
     assert caplog.text == ""
 
 
-def test_boot_probe_explains_an_unreadable_table(caplog, monkeypatch, tmp_path):
+def test_boot_probe_explains_an_unreadable_table(caplog, monkeypatch, tmp_path, df_fixture):
     """lance reports a permission error as 'Not found', which sends you hunting
     for a file that is sitting right there. The boot message has to say so."""
     uri = str(tmp_path / "db")
-    ingest_df(lancedb.connect(uri), DF_FIXTURE)
+    ingest_df(lancedb.connect(uri), df_fixture)
     monkeypatch.setattr(server.settings, "ka_lancedb_uri", uri)
 
     class Unreadable:

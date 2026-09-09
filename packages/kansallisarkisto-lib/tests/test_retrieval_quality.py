@@ -7,10 +7,9 @@ unfindable. Each is pinned here against the fixture so it cannot come back.
 
 The audit's standing results, for reference:
 
-- 5 of 6,876 records could not be retrieved by any keyword. Four have no
-  transcript, place, index term or language at all, so there is nothing to index;
-  they remain reachable by DF number. The fifth was a false alarm in the audit,
-  not a gap.
+- 4 of 6,876 records could not be retrieved by any keyword: they carry no
+  transcript, place, index term or language at all. Indexing the citation
+  ("df <number>") closed that, so every charter is now reachable.
 - 2,266 word occurrences across 621 records (14% of the transcribed ones) were
   fused to a superscript footnote marker, and 4,801 more across 1,969 records
   were split by editorial brackets. Both are scholarly-edition apparatus, and
@@ -29,13 +28,6 @@ from pathlib import Path
 import pytest
 
 from ra_mcp_kansallisarkisto_lib.models import DfRecord, strip_editorial_apparatus
-
-DF_FIXTURE = Path(__file__).parent / "fixtures" / "df_sample.jsonl"
-
-
-def _fixture_records() -> list[dict]:
-    return [json.loads(line) for line in DF_FIXTURE.read_text(encoding="utf-8").splitlines() if line.strip()]
-
 
 # --- the editorial apparatus, which is markup rather than text ----------------
 
@@ -71,10 +63,10 @@ def test_searchable_text_strips_apparatus_but_the_transcript_keeps_it():
     assert "Finllandh" in record.searchable_text
 
 
-def test_fixture_actually_contains_the_apparatus_this_guards_against():
+def test_fixture_actually_contains_the_apparatus_this_guards_against(df_fixture_records):
     """If DF 404 ever leaves the fixture, the tests below would pass vacuously."""
-    marked = [r for r in _fixture_records() if any(c in r["transcript"] for c in "⁰¹²³⁴⁵⁶⁷⁸⁹°")]
-    bracketed = [r for r in _fixture_records() if "[" in r["transcript"]]
+    marked = [r for r in df_fixture_records if any(c in r["transcript"] for c in "⁰¹²³⁴⁵⁶⁷⁸⁹°")]
+    bracketed = [r for r in df_fixture_records if "[" in r["transcript"]]
     assert marked, "fixture no longer covers footnote markers"
     assert bracketed, "fixture no longer covers editorial brackets"
 
@@ -115,7 +107,7 @@ def test_a_phrase_is_narrower_than_its_words(search):
 # --- the standing guarantee ---------------------------------------------------
 
 
-def test_every_record_with_indexable_content_is_retrievable(search):
+def test_every_record_with_indexable_content_is_retrievable(search, df_fixture_records):
     """The corpus-wide sweep, in miniature.
 
     For each fixture record, take a distinctive word from its own searchable
@@ -123,7 +115,7 @@ def test_every_record_with_indexable_content_is_retrievable(search):
     gap in the first place.
     """
     unreachable = []
-    for raw in _fixture_records():
+    for raw in df_fixture_records:
         record = DfRecord.from_json(raw)
         words = [w for w in record.searchable_text.split() if len(w) > 6 and w.isalpha()]
         if not words:
@@ -136,14 +128,22 @@ def test_every_record_with_indexable_content_is_retrievable(search):
     assert not unreachable, f"records not retrievable by their own words: {unreachable}"
 
 
-def test_records_with_no_indexable_content_are_still_reachable_by_number(search):
+def test_charters_with_no_content_are_reachable_by_their_citation(search, df_fixture_records):
     """Four charters in the corpus carry no transcript, place, index term or
-    language. Nothing can index them, so search will never find them — but they
-    are real records and must not vanish entirely."""
-    empty = [r for r in _fixture_records() if not DfRecord.from_json(r).searchable_text.strip()]
-    assert empty, "fixture no longer covers the empty-record case"
-    for raw in empty:
-        assert search.get_charter(raw["df"]) is not None
+    language, so nothing about them was indexable and no keyword could reach
+    them. The citation is now part of the search text, which closes that gap —
+    "DF 18" and "18" both find DF 18."""
+    bare = [r for r in df_fixture_records if not (r["transcript"] or "").strip() and not (r["indexterm"] or "").strip() and not (r["issuingplace"] or "").strip() and not (r["language"] or "").strip()]
+    assert bare, "fixture no longer covers the contentless-record case"
+    for raw in bare:
+        df = raw["df"]
+        assert any(h["df"] == df for h in search.search(f"DF {df}", limit=50).records)
+        assert search.get_charter(df) is not None
+
+
+def test_no_record_is_left_without_indexable_text(df_fixture_records):
+    """The standing guarantee: every charter has something to match on."""
+    assert all(DfRecord.from_json(raw).searchable_text.strip() for raw in df_fixture_records)
 
 
 @pytest.mark.parametrize("query", ['"unclosed phrase', "konung]", "konung\\", "!!!", "*", "konung^2", "  konung  "])
@@ -153,10 +153,10 @@ def test_awkward_queries_do_not_raise(search, query):
     search.search(query)
 
 
-def test_the_corpus_snapshot_is_intact():
+def test_the_corpus_snapshot_is_intact(df_fixture_records):
     """Guards the ingest input itself: the fixture is real data, and a mangled
     encoding would quietly weaken every test above."""
-    records = _fixture_records()
+    records = df_fixture_records
     assert len(records) == len({r["objectID"] for r in records}), "duplicate objectIDs"
     assert any("Åbo" in r["issuingplace"] for r in records), "Swedish characters did not survive"
 
@@ -173,7 +173,7 @@ def test_full_corpus_reachability_is_understood():
         records = [DfRecord.from_json(json.loads(line)) for line in handle if line.strip()]
     empty = [r.df for r in records if not r.searchable_text.strip()]
     assert len(records) >= 6876
-    assert len(empty) <= 4, f"more records became unindexable: {empty}"
+    assert not empty, f"records with nothing indexable: {empty}"
 
 
 # --- what a multi-word query means -------------------------------------------

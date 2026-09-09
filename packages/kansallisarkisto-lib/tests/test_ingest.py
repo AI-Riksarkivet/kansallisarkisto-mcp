@@ -1,14 +1,12 @@
 """Tests for the df JSONL -> LanceDB ingest."""
 
 import gzip
-from pathlib import Path
 
 import pyarrow as pa
 import pytest
 
 from ra_mcp_kansallisarkisto_lib.ingest import ingest_df
 
-DF_FIXTURE = Path(__file__).parent / "fixtures" / "df_sample.jsonl"
 DF_FIXTURE_ROWS = 18
 
 
@@ -32,17 +30,17 @@ def test_ingest_builds_indexes(df_table):
     assert {"df_number", "year_from", "year_to", "language"} <= indexed
 
 
-def test_ingest_reads_gzip(db, tmp_path):
+def test_ingest_reads_gzip(db, tmp_path, df_fixture):
     """The real export is df.jsonl.gz; the fixture is plain. Both must load."""
     gz = tmp_path / "df.jsonl.gz"
-    gz.write_bytes(gzip.compress(DF_FIXTURE.read_bytes()))
+    gz.write_bytes(gzip.compress(df_fixture.read_bytes()))
     table = ingest_df(db, gz)
     assert table.count_rows() == DF_FIXTURE_ROWS
 
 
-def test_ingest_skips_malformed_lines(db, tmp_path):
+def test_ingest_skips_malformed_lines(db, tmp_path, df_fixture):
     jsonl = tmp_path / "broken.jsonl"
-    jsonl.write_text(DF_FIXTURE.read_text(encoding="utf-8") + "{not json\n", encoding="utf-8")
+    jsonl.write_text(df_fixture.read_text(encoding="utf-8") + "{not json\n", encoding="utf-8")
     assert ingest_df(db, jsonl).count_rows() == DF_FIXTURE_ROWS
 
 

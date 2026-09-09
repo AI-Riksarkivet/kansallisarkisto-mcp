@@ -14,6 +14,12 @@ DF_FIXTURE = Path(__file__).parents[2] / "kansallisarkisto-lib" / "tests" / "fix
 
 
 @pytest.fixture
+def df_fixture() -> Path:
+    """The sample export path, so test modules need not each rebuild it."""
+    return DF_FIXTURE
+
+
+@pytest.fixture
 def df_search(tmp_path):
     db = lancedb.connect(str(tmp_path / "test.lance"))
     ingest_df(db, DF_FIXTURE)
