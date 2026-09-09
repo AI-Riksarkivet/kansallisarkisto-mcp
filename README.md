@@ -89,23 +89,42 @@ MCP client ──/mcp──▶ ra_mcp_kansallisarkisto_mcp (FastMCP tools + form
 - `packages/kansallisarkisto-mcp` — FastMCP tools, LLM-facing descriptions, env settings,
   server entry point.
 
-The layout follows [ape-mcp](https://github.com/carpelan/ape-mcp) — uv workspace, two-package
-`<domain>-lib` / `<domain>-mcp` split, Dagger CI, digest-pinned base image — and the LanceDB
-spine follows [ra-mcp](https://github.com/AI-Riksarkivet/ra-mcp)'s `ra_mcp_dataset_lib`, minus
-its OpenTelemetry layer. Both packages are shaped as an `ra_mcp_*_lib` / `ra_mcp_*_mcp` module
-pair so they can merge into ra-mcp as a module later with no rework.
+A uv workspace of two packages:
+
+- `packages/kansallisarkisto-lib` — the LanceDB spine (`dataset.py`), the record model,
+  ingest, and search operations. No MCP dependency, so it is usable on its own.
+- `packages/kansallisarkisto-mcp` — FastMCP tools, LLM-facing descriptions, env settings,
+  server entry point.
 
 ## The data
 
-Harvested 29 July 2026 from `sisaltohaku.demo.kansallisarkisto.fi` via its public
-`/api/export-all` endpoint, as gzipped JSON Lines under `.data/`. Coverage is 98.25% of the
-live index; the shortfall is a systematic consequence of Elasticsearch's 10,000-document
-`from + size` ceiling, not sampling. See [`docs/how-it-works/data-sources.md`](docs/how-it-works/data-sources.md)
-for the corpus reference, and the traps that shape this server's schema.
+The corpora come from **[Sisältöhaku](https://sisaltohaku.demo.kansallisarkisto.fi/)**, the
+content-search demo service of **[Kansallisarkisto — the National Archives of
+Finland](https://kansallisarkisto.fi/)**. `scripts/harvest.py` (`make harvest`) downloads
+them through the service's own public JSON endpoints, the same ones the site's "download
+results" button uses.
 
-The records are the property of Kansallisarkisto and were published through its Sisältöhaku
-demo service. This is a derived snapshot; the live service is the authority. Cite the
-archive, not this snapshot.
+Coverage is 98.25% of the live index. The shortfall is systematic rather than sampling:
+Elasticsearch enforces a 10,000-document `from + size` ceiling per query and the public
+frontend exposes only two filterable axes, so a handful of large facet cells cannot be
+subdivided far enough to fit. The harvester records those as shortfalls instead of quietly
+returning a short file. See [`docs/how-it-works/data-sources.md`](docs/how-it-works/data-sources.md)
+for the corpus reference and the traps that shape this server's schema.
+
+A harvest is a **snapshot**, and the live index moves — `voudintilit` grew from 99,031 to
+99,125 documents between two harvests. The live service is always the authority.
+
+## Credit and licence
+
+The records are the property of **Kansallisarkisto** and were published through its
+[Sisältöhaku demo service](https://sisaltohaku.demo.kansallisarkisto.fi/). This repository
+holds no records — only the code that downloads, indexes and searches them.
+
+Cite **the archive**, not this snapshot, as the source of any document, and consult
+Kansallisarkisto for terms of reuse and redistribution. Anything quoted from these corpora is
+machine-recognised text and should be checked against the archive's own page images.
+
+The code in this repository is Apache-2.0.
 
 ## Development
 
