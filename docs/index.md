@@ -22,12 +22,20 @@ This is the single most consequential fact about searching this material. A quer
 Finnish returns nothing, and so does a query in modern Swedish spelling: use `bref` not
 `brev`, `konung` not `kung`, `Åbo` not `Turku`.
 
+That governs the text. The `issuingplace` **filter** follows a different rule, and it is the
+one that catches people out — see [Search Tips](how-it-works/search-tips.md): Finnish and
+Swedish places keep their historical Swedish form, but places beyond that realm are catalogued
+under their modern name, so `Tallinn` finds 197 charters and `Reval` finds none.
+
 ## The tools
 
 - **`df_search`** — full-text search over the charters, narrowable by language, place and
   country of issue, and year range. Swedish stemming and accent folding are applied. Each hit
   leads with its DF number, the citable identifier; page with `offset`.
 - **`df_get_charter`** — one charter's full transcript and catalogue record by DF number.
+
+Every DF number resolves to `https://df.kansallisarkisto.fi/document/<number>`, the National
+Archives' own edition of that charter — the link to hand a reader alongside the number.
 
 ## Quick connect
 

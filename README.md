@@ -34,6 +34,10 @@ account entries concerning Finland, 859–1530. The two larger corpora — `voud
 (98,945 bailiff accounts, 1539–1634) and `tuomiokirjat` (7,835,557 court-record pages,
 1600s–1900s) — are harvested and documented but not yet ingested.
 
+The range is wide but the weight is late: 83% of `df` falls in 1400–1530 and barely 240
+charters predate 1300, so a thin result for an early century is the archive rather than the
+query.
+
 ## The text is not in Finnish
 
 Finland was part of the Swedish realm until 1809, and these records were kept in the
@@ -42,15 +46,34 @@ German**; only the catalogue metadata — index terms, language and country labe
 Finnish. Search accordingly: `bref` not `brev`, `konung` not `kung`, `Åbo` not `Turku`,
 `Viborg` not `Viipuri`.
 
+That rule governs the **text**. The `issuingplace` **filter** is a cataloguer's vocabulary of
+499 values, and it is mixed: Finnish and Swedish places keep their historical Swedish form
+(`Åbo`, `Viborg`, `Nådendal`), but places outside that realm are recorded under their modern
+name — `Tallinn` not `Reval`, `Gdansk` not `Danzig`, `Tartu` not `Dorpat`. The historical
+forms of those three match nothing at all.
+
 ## Tools
 
-- `df_search(keyword, offset=0, limit=25, language?, issuingplace?, country?, year_min?, year_max?, match_all=true)`
+- `df_search(keyword, offset=0, limit=25, language?, issuingplace?, country?, year_min?, year_max?, match_all=true, fuzzy=0)`
   — full-text search over the charters. Swedish stemming and accent folding are applied, so
   `konungen` matches `konung` and `Abo` matches `Åbo`. Several words must **all** appear
   (`match_all=false` matches any of them) and `"quoted words"` are an exact phrase; `AND`, `OR`
-  and `NOT` are not operators and are matched as ordinary words. Each hit leads with its
-  **DF number**, the citable identifier. Page with `offset`.
+  and `NOT` are not operators and are matched as ordinary words. Spelling was never
+  standardised, so `fuzzy=1` is the right second attempt when a result set looks thin — pass a
+  base form, since a fuzzy term skips stemming. Each hit leads with its **DF number**, the
+  citable identifier. Page with `offset`.
 - `df_get_charter(df_number)` — one charter's full transcript and catalogue record.
+
+The catalogue's index term is a controlled vocabulary of 75 values shaped `Issuer,
+DocumentType` — `Paikallishallinto` (local administration, 1,783), `Kaupungit` (towns, 1,171),
+`Piispat` (bishops, 402); `Asiakirjat` (charters, 3,264), `Kirjeet` (letters, 2,215),
+`Tili- ja pöytäkirjamerkinnät` (account entries, 1,007). It has no filter of its own, but it is
+indexed, so those words work as keywords: `df_search(keyword="Piispat", issuingplace="Åbo")`.
+
+Every DF number resolves to **`https://df.kansallisarkisto.fi/document/<number>`** — the
+National Archives' own edition of that charter, with the printed-edition references (FMU, REA)
+and any images. That is the link to give a reader; a DF number identifies the document as an
+informational entity, not one particular edition, so it stays valid as editions change.
 
 ## Run locally
 

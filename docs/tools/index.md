@@ -19,6 +19,9 @@ no network.
 2. Read the DF number off a hit. It is the citable identifier, and the only stable handle on
    a charter.
 3. `df_get_charter` with that number for the full transcript.
+4. Cite the DF number, and give the reader
+   `https://df.kansallisarkisto.fi/document/<number>` — the archives' own edition of that
+   charter, carrying the printed-edition references (FMU, REA) and any images.
 
 ## What every result carries
 
