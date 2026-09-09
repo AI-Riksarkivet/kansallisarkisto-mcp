@@ -29,6 +29,29 @@ results always reflect the current Dockerfile and lockfile:
   GitHub's Security tab ingests. `security.yml` uploads it as a workflow artifact and, once
   Code Security is enabled on the repository, to the Security tab itself.
 
+## What the Security tab shows, and why it is not an emergency
+
+Now that the repository is public, `security.yml` uploads the full Trivy report to
+GitHub's code-scanning dashboard — every severity, not just the gate's CRITICAL/HIGH.
+Expect roughly a hundred open alerts, and expect **none of them to have a fix**.
+
+They are the Debian base image's standing CVE set: `perl-base`, `util-linux` and its
+libraries, `ncurses`, `gzip`, `libsqlite3-0`, `libsystemd0`. Zero are Python packages —
+the dependency surface this project controls is clean, and `pip-audit` gates that
+separately in `dagger call checks`.
+
+So the dashboard is a **report**, not a queue. The thing that gates a release is
+`scan-ci`, which runs with `--ignore-unfixed` and therefore fails only on findings a
+rebuild or a dependency bump can actually clear. An alert appearing there with a fixed
+version available is the signal worth acting on; the standing hundred are not, and no
+amount of triage will close them until Debian ships patches.
+
+The full unfiltered view, if you want it without the dashboard:
+
+```bash
+dagger call scan --ignore-unfixed=false
+```
+
 ## SBOM generation
 
 - **`generate-sbom-spdx`** — builds the image and runs Trivy again to emit an SPDX-JSON SBOM.
