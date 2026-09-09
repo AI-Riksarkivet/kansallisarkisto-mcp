@@ -81,16 +81,13 @@ provenance. See [Security](security.md).
 - It skips the two release-asset steps (extracting the provenance blob and uploading it), which
   attach to a GitHub release a dispatch run does not have.
 
-The Dagger module can also publish directly:
+After the push the workflow pulls the image back from the registry and checks it serves
+(`test-published`) — everything before that point exercises a locally built image, not the
+artefact consumers receive.
 
-```bash
-dagger call publish-docker \
-  --docker-username env:DOCKERHUB_USERNAME \
-  --docker-password env:DOCKERHUB_SECRET
-```
-
-which runs the tests and the build first, and refuses a tag that does not match the packaged
-version unless `--skip-validation` is passed.
+There is deliberately only one publish path. A second, Dagger-native one existed and was
+removed: it pushed under the same tags without SBOM, provenance or signature, and nothing
+ever ran it — the same condition that had left `scan-sarif` broken since it was written.
 
 ## Documentation
 
