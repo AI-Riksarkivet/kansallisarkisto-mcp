@@ -19,14 +19,16 @@ on:
     workflows: ["Tests"]
     types: [completed]
 
-permissions:
-  contents: write
-  pull-requests: write
+# Nothing here needs a token by default; the one job that writes declares it.
+permissions: {}
 
 jobs:
   auto-merge:
     name: Merge green Dependabot bumps
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # squash-merge the pull request
+      pull-requests: write # and close it
     if: >-
       github.event.workflow_run.event == 'pull_request' &&
       github.event.workflow_run.conclusion == 'success' &&
