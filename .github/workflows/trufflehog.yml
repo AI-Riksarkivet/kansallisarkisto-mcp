@@ -1,0 +1,32 @@
+name: Secret Leaks
+
+# GitHub's own secret scanning is not available here — it needs Code Security,
+# which this private repository does not have (the API answers 403). So this is
+# not a duplicate of a platform feature; it is the only secret scanning there is.
+#
+# fetch-depth: 0 because a secret that was committed and then removed is still in
+# the history, and still leaked.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  trufflehog:
+    name: Scan history for secrets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Secret scanning
+        uses: trufflesecurity/trufflehog@363923b901c911a9164f50b6c423f47c15372b1c # v3.97.4
+        with:
+          # verified: the credential was checked against its provider and works.
+          # unknown: could not be checked — reported rather than dropped, because
+          # "we could not verify it" is not the same as "it is not a secret".
+          extra_args: --results=verified,unknown

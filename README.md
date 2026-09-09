@@ -13,8 +13,11 @@ pinned: false
 [![Tests](https://github.com/AI-Riksarkivet/kansallisarkisto-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/AI-Riksarkivet/kansallisarkisto-mcp/actions/workflows/ci.yml)
 [![Security](https://github.com/AI-Riksarkivet/kansallisarkisto-mcp/actions/workflows/security.yml/badge.svg)](https://github.com/AI-Riksarkivet/kansallisarkisto-mcp/actions/workflows/security.yml)
 [![Documentation](https://github.com/AI-Riksarkivet/kansallisarkisto-mcp/actions/workflows/docs.yml/badge.svg)](https://ai-riksarkivet.github.io/kansallisarkisto-mcp/)
+[![Secret Leaks](https://github.com/AI-Riksarkivet/kansallisarkisto-mcp/actions/workflows/trufflehog.yml/badge.svg)](https://github.com/AI-Riksarkivet/kansallisarkisto-mcp/actions/workflows/trufflehog.yml)
 [![Python 3.14](https://img.shields.io/badge/python-3.14-blue.svg)](.python-version)
 [![License Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 [![Data: Kansallisarkisto](https://img.shields.io/badge/data-Kansallisarkisto-8A2BE2.svg)](https://sisaltohaku.demo.kansallisarkisto.fi/)
 
 MCP server over the **Sisältöhaku** corpora of Kansallisarkisto, the National Archives of
