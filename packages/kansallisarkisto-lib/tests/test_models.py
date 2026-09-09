@@ -68,3 +68,21 @@ def test_malformed_geoloc_does_not_raise_an_uncatchable_error():
         record = DfRecord.from_json({"objectID": "x", "df": "1", "_geoloc": bad})
         assert record.lat is None
         assert record.lng is None
+
+
+def test_a_year_that_parses_to_zero_is_still_unknown():
+    """0 means "unknown" whatever type it arrives as. The corpus only ever sends
+    ints, but the harvest is re-runnable and the sibling corpora differ in field
+    types — voudintilit's file_id is a zero-padded string where tuomiokirjat's is
+    an int — so the defensive path exists and should be pinned."""
+    from ra_mcp_kansallisarkisto_lib.models import _year
+
+    for value in (0, "0", "00", " 0 ", 0.0):
+        assert _year(value) is None, f"{value!r} should read as unknown"
+
+
+def test_unparseable_years_are_unknown_rather_than_an_error():
+    from ra_mcp_kansallisarkisto_lib.models import _year
+
+    for value in ("", "n.d.", None, "circa 1400"):
+        assert _year(value) is None
