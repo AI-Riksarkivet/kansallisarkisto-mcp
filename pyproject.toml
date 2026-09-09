@@ -8,8 +8,8 @@ ra-mcp-kansallisarkisto-mcp = { workspace = true }
 [dependency-groups]
 dev = [
     "httpx>=0.28.1",
-    "pytest>=8",
-    "pytest-asyncio>=0.25.0",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
     "ruff",
 ]
 
