@@ -20,6 +20,16 @@ pinned: false
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 [![Data: Kansallisarkisto](https://img.shields.io/badge/data-Kansallisarkisto-8A2BE2.svg)](https://sisaltohaku.demo.kansallisarkisto.fi/)
 
+[![SLSA Level 3](https://img.shields.io/badge/SLSA-Level%203-blue.svg)](docs/development/security.md#slsa-build-level-3-provenance)
+[![Signed with Sigstore](https://img.shields.io/badge/Sigstore-signed-purple.svg)](docs/development/security.md#supply-chain-attestations-at-publish-time)
+[![SBOM SPDX + CycloneDX](https://img.shields.io/badge/SBOM-SPDX%20%2B%20CycloneDX-green.svg)](docs/development/security.md#sbom-generation)
+
+The three supply-chain badges describe the release pipeline in
+[`publish.yml`](.github/workflows/publish.yml), and each links to the section of the security
+docs that says how it is produced. Nothing has been released yet — there are no tags — so
+they are a statement about how this project releases, not yet about artefacts you can
+download and verify.
+
 MCP server over the **Sisältöhaku** corpora of Kansallisarkisto, the National Archives of
 Finland — full-text search across machine-transcribed archival text, served from LanceDB.
 
