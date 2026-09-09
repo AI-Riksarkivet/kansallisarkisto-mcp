@@ -19,6 +19,7 @@ entries concerning Finland, 859–1530.
 | `country` | string | — | Case-insensitive substring of the Finnish country label: `Suomi`, `Ruotsi`, `Italia`. |
 | `year_min` | int | — | Earliest year the charter may fall in. |
 | `year_max` | int | — | Latest year the charter may fall in. |
+| `fuzzy` | int 0-2 | `0` | Edit distance per term. `1` catches spelling variants — the usual reason a search looks thin. Pass a base form: a fuzzy term skips stemming. |
 | `match_all` | bool | `true` | Require every word. `false` matches any word — useful when a term may be spelled differently, but the total then counts charters matching only one word. |
 
 ## Query syntax

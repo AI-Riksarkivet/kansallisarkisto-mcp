@@ -135,6 +135,14 @@ The sweep found three ways documents had been silently unfindable:
 | `de`, `den`, `om` returned nothing — a Swedish analyser had removed them as stop words, though they are Latin content words | tokens in 1,735 / 846 / 1,133 documents | stop-word removal turned off for this corpus |
 | Quoted phrase queries **raised** instead of searching, so the MCP layer reported an internal error | every phrase query | positions added to the index |
 
+A fourth problem is not a bug but a property of the material, and it is the largest of all:
+**spelling was never standardised**, so `bref` and `breff` are the same word yet share only
+71 of their 2,104 charters. No index setting fixes that — stemming handles inflection, not
+orthography — so `df_search` exposes `fuzzy`, which takes `bref` from 257 charters to 2,212
+at 96.9% precision. It is opt-in because the engine makes fuzzy and stemming mutually
+exclusive: a fuzzy term skips analysis and `konungen` drops from 279 hits to 6. See
+[Search Tips](search-tips.md).
+
 Recovering the fused words moved the verified reference counts slightly upward — `konung`
 277 → 279, `ecclesia` 600 → 602 — which is what recovered recall looks like. `DF 3453`, for
 instance, reads `eccl[esi]a` in the source and was previously unreachable by `ecclesia`.

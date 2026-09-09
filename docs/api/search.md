@@ -16,9 +16,13 @@ DfSearch(db, *, table_name="df")
 search(
     keyword, *, limit=25, offset=0,
     language=None, issuingplace=None, country=None,
-    year_min=None, year_max=None,
+    year_min=None, year_max=None, match_all=True,
 ) -> SearchResult
 ```
+
+`match_all` decides what a multi-word keyword means: `True` (the default) requires every
+word, `False` matches any of them. A quoted keyword is passed to the query parser instead,
+so `'"de ecclesia"'` is an exact phrase.
 
 Raises `ValueError` for a blank keyword, a negative offset or a limit below 1 — guarded
 centrally, so a bad page cannot produce an empty result with a nonzero total and a broken
@@ -51,9 +55,15 @@ lancedb still auto-projects it when a `select` omits it but warns that it will s
 
 ## The spine
 
-`lancedb_fts_search(db, table_name, keyword, *, limit, offset=0, where=None)` is what
-`DfSearch` calls, and what the other two corpora will call. Filters arrive as a SQL `where`
-string built by the predicate helpers:
+```python
+lancedb_fts_search(
+    db, table_name, keyword, *,
+    limit, offset=0, where=None, columns=None, match_all=True,
+) -> SearchResult
+```
+
+is what `DfSearch` calls, and what the other two corpora will call. Filters arrive as a SQL
+`where` string built by the predicate helpers:
 
 | helper | produces |
 |---|---|

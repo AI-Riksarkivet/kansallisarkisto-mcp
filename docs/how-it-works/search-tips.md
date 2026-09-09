@@ -45,6 +45,30 @@ A multi-word keyword requires every word; `"quoted words"` require that exact ph
 littera` also matches the 51 charters containing the word `or`. Widen by dropping a word or
 passing `match_all=false`, never by writing `OR`.
 
+## Spelling is the main reason a search looks empty
+
+Orthography was never standardised, so the same word appears in many forms and **a single
+spelling finds one scribe's usage, not the word**. Measured on this corpus:
+
+| you search | charters | the other spelling | charters | overlap |
+|---|---:|---|---:|---:|
+| `bref` | 257 | `breff` | 1,918 | **71** |
+| `kyrkia` | 13 | `kirkio` | 82 | **1** |
+| `konung` | 279 | `konungh` | 165 | **35** |
+
+Two different mechanisms address this and the engine makes them **mutually exclusive**:
+
+- **Stemming** (always on) handles *inflection*: `konungen` finds all 279 charters that stem
+  to `konung`.
+- **`fuzzy=1`** handles *orthography*: it takes `bref` from 257 charters to 2,212, and 96.9%
+  of those still contain a real variant. `fuzzy=2` was tried and rejected — recall barely
+  moves while precision falls to 67%.
+
+A fuzzy term skips the analysis pipeline, so it is matched raw against stemmed index terms:
+`konungen` with `fuzzy=1` collapses from 279 hits to **6**. So exact-plus-stemming is the
+default, and when a search looks thin the right second attempt is `fuzzy=1` **on a base
+form** — `konung`, not `konungen`.
+
 ## A zero result means the term is absent
 
 `kirkko` — the Finnish for "church" — appears in **zero** of the 6,876 charters. That is not

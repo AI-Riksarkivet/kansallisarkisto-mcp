@@ -28,10 +28,12 @@ Finnish. Search accordingly: `bref` not `brev`, `konung` not `kung`, `Åbo` not 
 
 ## Tools
 
-- `df_search(keyword, offset=0, limit=25, language?, issuingplace?, country?, year_min?, year_max?)`
+- `df_search(keyword, offset=0, limit=25, language?, issuingplace?, country?, year_min?, year_max?, match_all=true)`
   — full-text search over the charters. Swedish stemming and accent folding are applied, so
-  `konungen` matches `konung` and `Abo` matches `Åbo`. Each hit leads with its **DF number**,
-  the citable identifier. Page with `offset`.
+  `konungen` matches `konung` and `Abo` matches `Åbo`. Several words must **all** appear
+  (`match_all=false` matches any of them) and `"quoted words"` are an exact phrase; `AND`, `OR`
+  and `NOT` are not operators and are matched as ordinary words. Each hit leads with its
+  **DF number**, the citable identifier. Page with `offset`.
 - `df_get_charter(df_number)` — one charter's full transcript and catalogue record.
 
 ## Run locally
