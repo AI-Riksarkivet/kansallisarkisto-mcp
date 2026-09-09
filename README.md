@@ -20,12 +20,6 @@
 [![Signed with Sigstore](https://img.shields.io/badge/Sigstore-signed-purple.svg)](docs/development/security.md#supply-chain-attestations-at-publish-time)
 [![SBOM SPDX + CycloneDX](https://img.shields.io/badge/SBOM-SPDX%20%2B%20CycloneDX-green.svg)](docs/development/security.md#sbom-generation)
 
-The three supply-chain badges describe the release pipeline in
-[`publish.yml`](.github/workflows/publish.yml), and each links to the section of the security
-docs that says how it is produced. Nothing has been released yet — there are no tags — so
-they are a statement about how this project releases, not yet about artefacts you can
-download and verify.
-
 MCP server over the **Sisältöhaku** corpora of Kansallisarkisto, the National Archives of
 Finland — full-text search across machine-transcribed archival text, served from LanceDB.
 
@@ -37,6 +31,41 @@ account entries concerning Finland, 859–1530. The two larger corpora — `voud
 The range is wide but the weight is late: 83% of `df` falls in 1400–1530 and barely 240
 charters predate 1300, so a thin result for an early century is the archive rather than the
 query.
+
+## Quick start
+
+Harvesting `df` takes about three seconds — two HTTP requests, 3 MB — so trying this is cheap:
+
+```bash
+make install
+make harvest       # df only: 6,876 charters, ~3 s, 100% of the live index
+make ingest-df     # .data/df/df.jsonl.gz -> data/df (LanceDB, ~69 MB)
+
+claude mcp add kansallisarkisto -- uv run kansallisarkisto-mcp
+```
+
+Run that from the repository root, or add `--cwd /path/to/kansallisarkisto-mcp`, so the
+server resolves `data/` next to the project. For Claude Desktop, Cursor or Windsurf, add a
+stdio server invoking `uv run kansallisarkisto-mcp` with the repo as its working directory.
+The larger corpora are a different proposition — see [Run locally](#run-locally).
+
+## What a result looks like
+
+```text
+> df_search(keyword="konung", issuingplace="Åbo", limit=2)
+
+Diplomatarium Fennicum search results for 'konung': showing 2 of 49 records (offset 0)
+
+**DF 2457** — 1442 — Åbo, Suomi
+  language: ruotsi · index term: Paikallishallinto, Asiakirjat
+  Jagh Carll Knutson, riddare, kännes och giör witterligit medh thette mit öpne breff, adt
+  iagh hafwer vndt bårgarne i Raumo på min nådhige herre konung Christoffers wegne, adt the
+  skulle och måghe bruka theras köpslaghan i alle måttho som the bårgare göra i Åbo …
+```
+
+Karl Knutsson, 1442, granting the burghers of Rauma the trading rights of Åbo. Read it in
+full with `df_get_charter(df_number=2457)`, and cite it as **DF 2457** —
+<https://df.kansallisarkisto.fi/document/2457>.
 
 ## The text is not in Finnish
 
@@ -77,16 +106,19 @@ informational entity, not one particular edition, so it stays valid as editions 
 
 ## Run locally
 
-The corpora are not in this repository (6.3 GB; `.data/` is git-ignored) — re-download them
-from the live service first:
+No corpus ships with this repository — `.data/` and `data/` are both git-ignored, and the
+data is re-harvested rather than versioned. `make harvest` takes `df` alone, which is the
+three-second path above. The other two are a different proposition: `voudintilit` is about a
+minute, `tuomiokirjat` about 1.5 hours and 6.3 GB, and neither is ingested yet.
 
 ```bash
-make install
-make harvest                              # or: uv run python scripts/harvest.py --index all
-make ingest-df                            # .data/df/df.jsonl.gz -> data/df (LanceDB)
-uv run kansallisarkisto-mcp               # stdio, for MCP clients
+uv run python scripts/harvest.py --index all        # all three corpora (6.3 GB)
+uv run kansallisarkisto-mcp                         # stdio, for MCP clients
 KA_MCP_TRANSPORT=http uv run kansallisarkisto-mcp   # streamable HTTP on :8000 (/mcp)
 ```
+
+Over HTTP the server also answers `/health` (liveness) and `/ready` (readiness — 503 until a
+searchable table is mounted); see [Observability](docs/development/observability.md).
 
 Or containerised. The image ships **without data** — mount a LanceDB directory at `/data`:
 
@@ -178,6 +210,11 @@ make test      # pytest — no network, no corpus needed
 make test-mcp  # end-to-end: production image + fixture table + real MCP client (Dagger)
 make ci        # the full pipeline GitHub Actions runs
 ```
+
+The three supply-chain badges above describe the release pipeline in
+[`publish.yml`](.github/workflows/publish.yml), each linking to the section of the security
+docs that says how it is produced. Nothing has been released yet — there are no tags — so
+they state how this project releases, not yet something you can download and verify.
 
 `packages/kansallisarkisto-lib/tests/fixtures/df_sample.jsonl` holds 18 real charters chosen
 to cover the corpus's documented traps — untranscribed records, unknown years, unlocated
