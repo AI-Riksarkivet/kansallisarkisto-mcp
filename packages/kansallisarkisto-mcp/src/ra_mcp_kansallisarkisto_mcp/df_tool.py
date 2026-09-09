@@ -77,7 +77,9 @@ def register_df_tools(mcp: FastMCP, get_search) -> None:
         ] = None,
         issuingplace: Annotated[
             str | None,
-            Field(description="Place of issue in its historical form, matched as a case-insensitive substring: 'Åbo' (815), 'Stockholm' (687), 'Rom' (359). 2,314 charters record no place."),
+            Field(
+                description="Place of issue in its historical form, matched as a case-insensitive substring: 'Åbo' (815), 'Stockholm' (687), 'Rom' (364 — the substring also catches 'Magliano Romano'). 2,314 charters record no place."
+            ),
         ] = None,
         country: Annotated[
             str | None,

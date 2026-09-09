@@ -91,7 +91,8 @@ matches nothing. 27 charters carry more than one language, as compounds like `la
 `Italia` (467). 2,321 charters record no country.
 
 `issuingplace` takes the historical place name as a substring: `Åbo` (815), `Stockholm`
-(687), `Rom` (359). 2,314 charters record no place.
+(687), `Rom` (364). 2,314 charters record no place. These are substring counts, which is
+what the filter does: `Rom` also matches the five charters issued at `Magliano Romano`.
 
 ## Untranscribed does not mean absent
 

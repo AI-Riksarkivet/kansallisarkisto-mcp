@@ -91,9 +91,10 @@ single one is unfixed upstream**: `perl-base`, `util-linux` and its libraries (`
 `libsystemd0`. All of them are OS packages; **zero** are Python packages, so the dependency
 surface the application actually controls is clean (and `pip-audit` gates that separately).
 
-None of it is actionable from the Dockerfile — there is no patched Debian version to move to.
-That is precisely the package set an Alpine base avoids, and it is the price of the wheels.
-The image is also ~880 MB rather than a few hundred.
+None of it is actionable *within Debian* — there is no patched version to move to. That is
+precisely the package set an Alpine base avoids, and it is the price of the wheels. The image
+is also ~880 MB rather than a few hundred. A different glibc base does clear them; see
+[Wolfi, evaluated and deferred](#wolfi-evaluated-and-deferred) below.
 
 What is gained in exchange: `python:3.14-slim` is the same base the CI test container and
 the Dagger dev container use, so the published image runs on the same libc the tests ran
@@ -110,6 +111,43 @@ COPY --from=ghcr.io/astral-sh/uv:0.12.5@sha256:db2d5999728c5837e1bf9ba278ee6b05c
 so a `vX.Y.Z` image tag stays reproducible: rebuilding it later cannot silently pick up a
 different base or `uv` build than the one that was actually scanned and signed at release
 time.
+
+### Wolfi, evaluated and deferred
+
+Alpine is impossible, but it is not the only small base, and the 54 findings are not a fact
+of life. A multi-stage [Wolfi](https://github.com/wolfi-dev) build — `cgr.dev/chainguard/python:latest-dev`
+to build, `cgr.dev/chainguard/python:latest` to run — was built and measured against the
+current image:
+
+| | `python:3.14-slim` | Wolfi, multi-stage |
+|---|---|---|
+| Trivy CRITICAL/HIGH | 54 (3 CRITICAL) | **0** |
+| Image size | 879 MB | **704 MB** |
+| Python | 3.14.6 | 3.14.7 |
+| libc | glibc (Debian 13.6) | glibc 2.44 |
+| `lancedb` + FTS search | works | works |
+| `/health` | 200 | 200 |
+| `USER 1000` | yes | yes |
+
+It works. Wolfi is glibc, so the manylinux wheels install exactly as they do on Debian; the
+image was run and answered `/health`, and `lancedb` built an FTS index and returned hits from
+it. Wolfi simply does not ship `perl` or `util-linux` in a Python runtime, which is where all
+54 findings live. The runtime stage carries no shell or package manager, so it is also 175 MB
+smaller than the Debian image despite the base being half the size of `python:3.14-slim`
+(98.9 MB against 191 MB).
+
+**It is deferred because it costs the digest pinning described just above.** Chainguard's
+free tier publishes only `:latest`; versioned tags are a paid subscription. A digest can be
+resolved and pinned, but old digests are garbage-collected, so a pinned digest goes
+unpullable after some weeks and rebuilding an old `vX.Y.Z` tag fails. That trades away
+exactly the reproducibility this section exists to guarantee, and `:latest` would float the
+Python version too.
+
+The trade is worth revisiting if the reproducibility guarantee is relaxed, if a paid
+Chainguard tier becomes available, or if another digest-stable minimal glibc base appears.
+Two other options were measured and rejected outright: `gcr.io/distroless/python3-debian12`
+is *worse* (48 findings, 19 of them fixable — an older Debian 12), and `python:3.14-alpine`
+scores 9 but cannot run `lancedb` at all.
 
 ## Non-root runtime
 
