@@ -12,7 +12,7 @@ MCP client ──/mcp──▶ ra_mcp_kansallisarkisto_mcp   FastMCP tools, form
                                └─▶ data/df   LanceDB table, built from the harvested export
 ```
 
-Two workspace packages, mirroring [ape-mcp](https://github.com/carpelan/ape-mcp):
+Two workspace packages:
 
 - **`packages/kansallisarkisto-lib`** — everything that would be useful without MCP: the
   record model, the ingest, the search operations and the shared LanceDB spine. No FastMCP
@@ -20,13 +20,9 @@ Two workspace packages, mirroring [ape-mcp](https://github.com/carpelan/ape-mcp)
 - **`packages/kansallisarkisto-mcp`** — the tool definitions and their LLM-facing
   descriptions, the plain-text formatter, env settings and the server entry point.
 
-They are named as an `ra_mcp_*_lib` / `ra_mcp_*_mcp` module pair so they can merge into
-[ra-mcp](https://github.com/AI-Riksarkivet/ra-mcp) as a module later with no rework.
-
 ## The LanceDB spine
 
-`ra_mcp_kansallisarkisto_lib.dataset` is a port of ra-mcp's `ra_mcp_dataset_lib`, minus its
-OpenTelemetry layer. It owns the parts every corpus shares, so `voudintilit` and
+`ra_mcp_kansallisarkisto_lib.dataset` owns the parts every corpus shares, so `voudintilit` and
 `tuomiokirjat` inherit them rather than growing their own copies:
 
 - **`SearchResult`** — one page plus a true total.

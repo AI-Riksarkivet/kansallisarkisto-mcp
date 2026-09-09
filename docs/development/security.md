@@ -74,8 +74,8 @@ slsa-verifier verify-image docker.io/riksarkivet/kansallisarkisto-mcp@<digest> \
 
 `.docker/kansallisarkisto-mcp.dockerfile` builds on `python:3.13-slim` (Debian, glibc).
 
-**This is forced, not chosen.** The obvious posture for a small scan surface is Alpine, and
-ape-mcp uses it. It is not available here: `lancedb` is a Rust extension published as
+**This is forced, not chosen.** The obvious posture for a small scan surface is Alpine.
+It is not available here: `lancedb` is a Rust extension published as
 manylinux wheels only — no musllinux wheel and, because it also publishes no sdist, no
 source fallback either. On a musl base `uv sync` fails outright, which is exactly how this
 was found (`dagger call test-mcp` could not build the image). `pyarrow` does ship musl

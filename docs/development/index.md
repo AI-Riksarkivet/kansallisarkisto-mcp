@@ -11,8 +11,8 @@ kansallisarkisto-mcp/
 ├── .data/                        # harvested corpora (git-ignored, 6.3 GB)
 ├── data/                         # built LanceDB tables (git-ignored)
 ├── packages/
-│   ├── kansallisarkisto-lib/     # ra-mcp-kansallisarkisto-lib — LanceDB spine, ingest, search
-│   └── kansallisarkisto-mcp/     # ra-mcp-kansallisarkisto-mcp — FastMCP tools, formatter, entry point
+│   ├── kansallisarkisto-lib/     # LanceDB spine, record model, ingest, search
+│   └── kansallisarkisto-mcp/     # FastMCP tools, formatter, settings, entry point
 ├── .dagger/                      # Go Dagger module (package main, receiver KansallisarkistoMcp)
 ├── .docker/                      # kansallisarkisto-mcp.dockerfile + docker-compose.yml
 ├── docs/                         # this zensical site's markdown sources
@@ -88,7 +88,7 @@ every function with `dagger functions`.
 `make ci` runs exactly what `.github/workflows/ci.yml` runs, so running it before pushing
 catches the same failures CI would.
 
-### Three things this repo does that ape-mcp does not
+### Three choices worth knowing about
 
 **Every `source` parameter carries an `+ignore`.** Dagger uploads the host directory into
 the engine before any function runs, and `.dockerignore` does not apply to that — it only
@@ -97,15 +97,14 @@ filters the Dockerfile build that happens later. With a 6.3 GB `.data/` and a 48
 on every single call. The `+ignore` list mirrors `.dockerignore` and is the Dagger-native
 way to say it.
 
-**`dagger.json` pins `engineVersion` to the version the module is verified against**, rather
-than inheriting ape-mcp's. `engineVersion` is a *minimum*, so a lower pin constrains nothing
+**`dagger.json` pins `engineVersion` to the version the module is verified against.**
+`engineVersion` is a *minimum*, so a lower pin constrains nothing
 — CI runs `version: "latest"` either way — while a pin above the locally installed CLI stops
 `make ci` from running at all until the developer upgrades. Raise it when the module starts
 depending on something newer, not before.
 
-**There are no `compose-up` / `compose-test` Dagger functions.** ape-mcp has them, and they
-work there because its service is stateless. This one is defined by a data mount, and a host
-bind mount is exactly what Dagger's daemon-less compose module cannot express — it fails
+**There are no `compose-up` / `compose-test` Dagger functions.** This service is defined by a
+data mount, and a host bind mount is exactly what Dagger's daemon-less compose module cannot express — it fails
 resolving the bind source before the service ever starts. Rather than ship two Make targets
 that can never pass, `.docker/docker-compose.yml` is left to real `docker compose` (where it
 is verified to build, mount `../data` and serve), and `dagger call serve-up` covers the
