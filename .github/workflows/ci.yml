@@ -43,3 +43,14 @@ jobs:
           args: test-mcp
           cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
           version: "latest"
+
+      # Verifies the documented no-data path: the image ships empty, and the
+      # server must still boot and answer /health rather than crash-loop. The
+      # end-to-end test above always mounts a table, so nothing else covers it.
+      - name: Verify the image boots without data
+        uses: dagger/dagger-for-github@27b130bf0f79a7f6fbbbe0fbca6760dc9bb40a77 # v8.4.1
+        with:
+          verb: call
+          args: test-server
+          cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
+          version: "latest"

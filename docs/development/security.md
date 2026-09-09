@@ -17,24 +17,26 @@ gate fail on every run forever, and a gate that always fails is one nobody reads
 *fixable* findings means a red scan is always something this repo can act on — and it turns
 red the moment Debian ships a fix that a rebuild has not picked up, which is the signal worth
 having. The cost is that an unfixed critical does not fail the gate, so the unfiltered view
-is not optional: `dagger call scan --ignore-unfixed=false`, which is also what `scan-json`
-reports, and what `scan-sarif` feeds to GitHub's Security tab. Related
-functions, all rebuilding the image fresh so results always reflect the current Dockerfile
-and lockfile:
+is not optional: `dagger call scan --ignore-unfixed=false` (or `--format json --exit-code 0`
+for a report that never fails). Two related functions, both rebuilding the image fresh so
+results always reflect the current Dockerfile and lockfile:
 
-- **`scan-json`** — same scan, JSON output, exit code `0` (never fails the build).
 - **`scan-ci`** — the CRITICAL/HIGH gate phrased for a pipeline: non-zero exit and a wrapped
   error message on failure. `.github/workflows/publish.yml` runs this **before** the push, so
-  a release that would ship a fixable CRITICAL or HIGH never reaches the registry.
+  a release that would ship a fixable CRITICAL or HIGH never reaches the registry, and
+  `security.yml` runs it weekly.
 - **`scan-sarif`** — SARIF output to a file (`trivy-results.sarif` by default), the format
-  GitHub's Security tab ingests.
+  GitHub's Security tab ingests. `security.yml` uploads it as a workflow artifact and, once
+  Code Security is enabled on the repository, to the Security tab itself.
 
 ## SBOM generation
 
 - **`generate-sbom-spdx`** — builds the image and runs Trivy again to emit an SPDX-JSON SBOM.
 - **`generate-sbom-cyclone-dx`** — the same, in CycloneDX format.
-- **`export-sbom`** — generates an SBOM (format selectable, `spdx-json` by default) and writes
-  it to a local path (`./sbom.json` by default) instead of just returning the file handle.
+
+Both run weekly in `security.yml`, are attached to every tagged release beside the
+provenance, and are what `make sbom` writes locally. Append `export --path ./sbom.json` to
+either to write the file rather than return a handle.
 
 ## Supply-chain attestations at publish time
 

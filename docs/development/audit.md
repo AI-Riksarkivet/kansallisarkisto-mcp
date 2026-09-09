@@ -146,7 +146,14 @@ pushed without the Trivy gate that `docs/development/security.md` describes in d
     `test-published` step that pulls the pushed image back and checks it serves — everything
     earlier in the job exercises a locally built image, not the artefact consumers receive.
 
-    `make scan` and `make sbom` make the developer-facing variants reachable.
+    `make scan` and `make sbom` make the developer-facing variants reachable, and
+    `test-server` joined `ci.yml`: it is the only check of the documented no-data path, where
+    the image ships empty and the server must still boot and answer `/health` rather than
+    crash-loop — `test-mcp` always mounts a table.
+
+    `scan-json` and `export-sbom` were deleted rather than wired. Both were thin wrappers
+    over `scan` and `generate-sbom`, which already take the format and exit-code parameters;
+    two names for one behaviour is how `scan-sarif` stayed broken unnoticed.
 
     **`scan-sarif` was broken**, which is what being never-executed buys you: it wrote to
     `/output/` without creating it, so every run would have ended in "failed to create output

@@ -74,21 +74,6 @@ func (m *KansallisarkistoMcp) Scan(
 	return output, nil
 }
 
-// ScanJson performs vulnerability scanning and returns JSON output
-func (m *KansallisarkistoMcp) ScanJson(
-	ctx context.Context,
-	// Source directory containing .docker/ and application code
-	// +defaultPath="/"
-	// +ignore=[".venv", ".git", ".data", "data", "site", ".pytest_cache", ".ruff_cache", "**/__pycache__", "*.pyc", ".env"]
-	// +optional
-	source *dagger.Directory,
-	// Severity levels to report
-	// +default="CRITICAL,HIGH"
-	severity string,
-) (string, error) {
-	return m.Scan(ctx, source, severity, "json", 0, false)
-}
-
 // ScanCi performs vulnerability scanning for CI/CD pipeline
 // Fails build if CRITICAL or HIGH vulnerabilities are found
 func (m *KansallisarkistoMcp) ScanCi(
@@ -200,35 +185,6 @@ func (m *KansallisarkistoMcp) GenerateSbomCycloneDx(
 	source *dagger.Directory,
 ) (*dagger.File, error) {
 	return m.GenerateSbom(ctx, source, "cyclonedx")
-}
-
-// ExportSbom generates and exports SBOM to a local file
-func (m *KansallisarkistoMcp) ExportSbom(
-	ctx context.Context,
-	// Source directory containing .docker/ and application code
-	// +defaultPath="/"
-	// +ignore=[".venv", ".git", ".data", "data", "site", ".pytest_cache", ".ruff_cache", "**/__pycache__", "*.pyc", ".env"]
-	// +optional
-	source *dagger.Directory,
-	// SBOM format (spdx-json, cyclonedx, spdx, github)
-	// +default="spdx-json"
-	format string,
-	// Output file path
-	// +default="./sbom.json"
-	outputPath string,
-) (string, error) {
-	sbomFile, err := m.GenerateSbom(ctx, source, format)
-	if err != nil {
-		return "", err
-	}
-
-	// Export the file
-	_, err = sbomFile.Export(ctx, outputPath)
-	if err != nil {
-		return "", fmt.Errorf("failed to export SBOM: %w", err)
-	}
-
-	return fmt.Sprintf("SBOM exported to %s", outputPath), nil
 }
 
 // containsRegistry checks if an image reference contains a registry prefix
