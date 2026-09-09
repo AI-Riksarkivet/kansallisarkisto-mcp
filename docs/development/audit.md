@@ -130,8 +130,38 @@ that check ran only when someone typed `make test-mcp` locally.
 `publish.yml` ran `test`, but not `checks` and not `scan` — so a release image was built and
 pushed without the Trivy gate that `docs/development/security.md` describes in detail.
 
-Ten Dagger functions remain wired into no workflow and no Make target. None is a gate, so
-none is urgent, but each is code that is maintained and never executed:
+!!! success "Resolved"
+
+    Every remaining function is now either executed or gone.
+
+    A new `security.yml` runs `scan-ci` as a gate, then `scan-sarif`, on pushes that touch
+    the image or its dependencies and weekly on a schedule — CVE surface moves when
+    advisories are published, not when this repository is edited. It uploads the SARIF as a
+    workflow artifact and, best-effort, to the Security tab: code scanning needs GitHub Code
+    Security, which is off for this private repository and answers 403, so that step is
+    `continue-on-error` and starts working the moment it is enabled. A second job produces
+    both SBOM formats.
+
+    `publish.yml` gained the SBOMs as release assets beside the provenance, and a
+    `test-published` step that pulls the pushed image back and checks it serves — everything
+    earlier in the job exercises a locally built image, not the artefact consumers receive.
+
+    `make scan` and `make sbom` make the developer-facing variants reachable.
+
+    **`scan-sarif` was broken**, which is what being never-executed buys you: it wrote to
+    `/output/` without creating it, so every run would have ended in "failed to create output
+    file". The SBOM functions had the `mkdir -p` line and it did not. Fixed and verified —
+    it now emits valid SARIF 2.1.0 with 173 results.
+
+    **`publish-docker` was deleted** rather than wired. It pushed under the same tags as the
+    release workflow but without SBOM, provenance or signature, and nothing ran it — the same
+    condition that had left `scan-sarif` broken. An untested path that writes to a public
+    registry is worse than no path. `getVersion` and `validateVersion` went with it; the
+    workflow validates the tag in bash, and now checks **both** package versions rather than
+    only the one the image is named after.
+
+Ten Dagger functions remained wired into no workflow and no Make target. None was a gate, so
+none was urgent, but each was code that was maintained and never executed:
 
 ```
 scan          scan-json     scan-sarif
@@ -139,8 +169,8 @@ generate-sbom-spdx    generate-sbom-cyclone-dx    export-sbom
 test-server   test-published    serve-published    publish-docker
 ```
 
-`scan-sarif` is the notable one: it exists to feed GitHub's Security tab, and nothing uploads
-its output.
+`scan-sarif` was the notable one: it existed to feed GitHub's Security tab, and nothing
+uploaded its output.
 
 ### 5b. `workflow_dispatch` published without provenance
 
@@ -225,13 +255,14 @@ point for the entire data pipeline. The Makefile table on the same page likewise
 - **`test_fuzzy_is_opt_in_so_stemming_keeps_working(search)`** takes the `search` fixture and
   never uses it, paying for a full fixture ingest to assert a module constant.
 - **Version validation covers one package.** Both `publish.yml` and Dagger's `validateVersion`
-  check only `packages/kansallisarkisto-mcp/pyproject.toml`; the lib version can drift
-  unnoticed. Both are `0.1.0` today.
+  checked only `packages/kansallisarkisto-mcp/pyproject.toml`; the lib version could drift
+  unnoticed. **Resolved** — `publish.yml` now validates both manifests against the tag.
 - **`or` is cited as 51 charters** in `search-tips.md` and 50 in `test_retrieval_quality.py`.
   Trivial in isolation, but this repository argues from exact counts, so an unreconciled pair
   costs more here than it would elsewhere.
-- **Two publish paths.** CI publishes via `docker/build-push-action`; Dagger's `PublishDocker`
-  is never called by CI and does not push `:latest`. Both are documented; they can drift.
+- **Two publish paths.** CI published via `docker/build-push-action` while Dagger's
+  `PublishDocker` was never called and pushed no attestations. **Resolved** — `PublishDocker`
+  is deleted; there is one publish path.
 
 ---
 
