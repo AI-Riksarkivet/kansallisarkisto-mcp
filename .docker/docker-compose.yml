@@ -1,0 +1,23 @@
+services:
+  kansallisarkisto-mcp:
+    image: riksarkivet/kansallisarkisto-mcp:latest
+    # Build locally when that tag is not already present. Without this, compose
+    # could only work after the first release had been pushed — not a useful state
+    # on a fresh clone. Once the image is published, a pulled copy satisfies the
+    # tag and the build is skipped.
+    build:
+      context: ..
+      dockerfile: .docker/kansallisarkisto-mcp.dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      KA_MCP_TRANSPORT: "http"
+      KA_LANCEDB_URI: "/data"
+      HOST: "0.0.0.0"
+      PORT: "8000"
+      LOG_LEVEL: "INFO"
+    # The LanceDB tables built by `make ingest-df`. Read-only: the server never
+    # writes, and indexes are baked in at ingest time. The server boots without
+    # them and says so, so an un-ingested clone still starts.
+    volumes:
+      - ../data:/data:ro
