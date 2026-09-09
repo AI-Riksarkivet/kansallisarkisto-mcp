@@ -1,0 +1,24 @@
+[project]
+name = "ra-mcp-kansallisarkisto-mcp"
+version = "0.1.0"
+description = "MCP server over the Kansallisarkisto Sisältöhaku corpora (LanceDB full-text search)"
+requires-python = ">=3.13"
+license = "Apache-2.0"
+dependencies = [
+    "ra-mcp-kansallisarkisto-lib",
+    "pydantic-settings>=2,<3",
+    "fastmcp==3.4.4",
+]
+
+[project.scripts]
+kansallisarkisto-mcp = "ra_mcp_kansallisarkisto_mcp.server:main"
+
+[tool.uv.sources]
+ra-mcp-kansallisarkisto-lib = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ra_mcp_kansallisarkisto_mcp"]
