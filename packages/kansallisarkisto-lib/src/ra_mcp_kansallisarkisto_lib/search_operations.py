@@ -31,6 +31,7 @@ class DfSearch:
         country: str | None = None,
         year_min: int | None = None,
         year_max: int | None = None,
+        match_all: bool = True,
     ) -> SearchResult:
         """Search the df table, optionally narrowed by catalogue metadata.
 
@@ -55,6 +56,9 @@ class DfSearch:
                 Finnish (``Suomi``, ``Ruotsi``, ``Italia``).
             year_min: Earliest year the charter may fall in.
             year_max: Latest year the charter may fall in.
+            match_all: Require every word of the keyword (the default). False
+                widens to any word, which helps when a term may be spelled
+                differently but makes the total far less meaningful.
 
         Returns:
             SearchResult with matching records.
@@ -69,7 +73,7 @@ class DfSearch:
             at_least("year_to", year_min) if year_min is not None else None,
             at_most("year_from", year_max) if year_max is not None else None,
         )
-        return lancedb_fts_search(self._db, self._table_name, keyword, limit=limit, offset=offset, where=where)
+        return lancedb_fts_search(self._db, self._table_name, keyword, limit=limit, offset=offset, where=where, match_all=match_all)
 
     def get_charter(self, df_number: str | int) -> dict[str, Any] | None:
         """Return one charter by its DF number, or ``None`` if there is no such charter.

@@ -17,6 +17,7 @@ from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any
 
 from lancedb.index import FTS, Bitmap, BTree
+from lancedb.query import MatchQuery
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
@@ -182,6 +183,7 @@ def lancedb_fts_search(
     offset: int = 0,
     where: str | None = None,
     columns: Sequence[str] | None = None,
+    match_all: bool = True,
 ) -> SearchResult:
     """Full-text search returning one correctly-paginated page and a true total.
 
@@ -202,6 +204,15 @@ def lancedb_fts_search(
     the row already carries. ``_score`` is requested explicitly: lancedb still
     auto-projects it when a ``select`` omits it, but warns that it will stop.
 
+    ``match_all`` decides what a multi-word keyword means. The engine's own
+    default is OR, which makes ``total_hits`` badly misleading: "konung
+    Stockholm" matches 944 charters, nearly all of them on one word alone, and a
+    caller reasonably reads 944 as "documents about the king in Stockholm". BM25
+    still floats the good ones to the top — 19 of the first 20 contained both
+    terms — but the total is a claim about the whole result set, not the page.
+    Requiring every term gives 77, which is the number that was actually meant.
+    Pass ``match_all=False`` to widen when a term may be spelled differently.
+
     Raises:
         ValueError: if ``keyword`` is blank, ``offset`` is negative or ``limit`` < 1.
     """
@@ -217,7 +228,17 @@ def lancedb_fts_search(
         raise ValueError(f"limit must be >= 1 (got {limit})")
 
     table = db.open_table(table_name)
-    query: Any = table.search(keyword, query_type="fts")
+    # A quoted keyword goes to the query parser, which is what understands phrase
+    # syntax; MatchQuery would match the quote characters themselves and silently
+    # turn '"de ecclesia"' from 8 hits into 496. Everything else goes through
+    # MatchQuery so that match_all can be honoured — the parser has no AND.
+    if '"' in keyword:
+        request: Any = keyword
+    elif match_all:
+        request = MatchQuery(keyword, column=FTS_COLUMN, operator="AND")
+    else:
+        request = keyword
+    query: Any = table.search(request, query_type="fts")
     if columns is None:
         columns = [name for name in table.schema.names if name != FTS_COLUMN]
     query = query.select([*columns, "_score"])
