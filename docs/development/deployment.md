@@ -81,6 +81,9 @@ version unless `--skip-validation` is passed.
 ## Documentation
 
 `.github/workflows/docs.yml` builds this site with `zensical build --clean` and deploys it to
-GitHub Pages. It is **manual-only** (`workflow_dispatch`) while the repository is private,
-since Pages is not available for private repositories on the free plan; restore the push
-trigger when the repository goes public.
+GitHub Pages on every push to `main`, and on demand via `workflow_dispatch`.
+
+Pages is served from a private repository because the `AI-Riksarkivet` org is on the Team
+plan. **The published site is public even though the repository is not** — restricting a
+Pages site to org members needs Enterprise Cloud — so treat everything under `docs/` as
+world-readable.

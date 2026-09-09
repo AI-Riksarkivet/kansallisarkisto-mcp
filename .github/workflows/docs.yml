@@ -1,8 +1,12 @@
 name: Documentation
-# Manual-only while the repo is private: GitHub Pages isn't available for
-# private repos on the free plan, so a push trigger would fail every run.
-# Restore the push trigger if the repo goes public.
+# The AI-Riksarkivet org is on the Team plan, which does serve Pages from a
+# private repository, so this builds on every push to main rather than by hand.
+# The published site is public even though the repo is not — access control for
+# Pages needs Enterprise Cloud. No path filter: zensical's snippets can pull in
+# files from outside docs/, so a filtered trigger would silently skip rebuilds.
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
