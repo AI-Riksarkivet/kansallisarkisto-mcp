@@ -21,6 +21,7 @@ entries concerning Finland, 859–1530.
 | `year_max` | int | — | Latest year the charter may fall in. |
 | `fuzzy` | int 0-2 | `0` | Edit distance per term. `1` catches spelling variants — the usual reason a search looks thin. Pass a base form: a fuzzy term skips stemming. It is whole-word distance, so it does not reach inflections; a prefix does. |
 | `match_all` | bool | `true` | Require every word. `false` matches any word — useful when a term may be spelled differently, but the total then counts charters matching only one word. |
+| `research_context` | string | — | A sentence on what the user is researching. Not searched; written to the server log beside the query, so an operator can see what the corpus is asked for. ra-mcp's tools take the same parameter. |
 
 ## Query syntax
 

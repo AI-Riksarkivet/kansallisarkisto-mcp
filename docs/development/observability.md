@@ -28,6 +28,40 @@ than one that answers "not ready" and why.
 
 In Kubernetes, wire `livenessProbe` to `/health` and `readinessProbe` to `/ready`.
 
+## Every call is one log line
+
+Telemetry is optional (below); the log is not. The Hugging Face Space runs without a
+collector, so its log is the only record of what the server is asked — and until v0.3.1
+it recorded nothing per call beyond the MCP library's `Processing request of type
+CallToolRequest`. Now every tool call writes one INFO line from
+`ra_mcp_kansallisarkisto_mcp.errors`, the same place every failure is turned into text:
+
+```
+df_search keyword='konung' issuingplace='Åbo' -> 49 hits in 118 ms
+tuomiokirjat_search keyword='hustru' series='Turun raastuvanoikeuden' year_min=1650 year_max=1660 -> 604 hits in 251 ms
+voudintilit_search keyword='smör' research_context='butter tithes' -> 10000+ hits in 340 ms
+df_get_charter df_number=2457 -> found in 6 ms
+tuomiokirjat_get_page page_id='nonsense' -> not found in 4 ms
+df_search keyword='"de ecclesia"' fuzzy=1 -> validation: fuzzy=1 cannot be combined with a quoted phrase in 0 ms
+df_search keyword='konung' -> missing table in 1 ms
+df_search keyword='konung' -> RuntimeError in 12 ms
+```
+
+Only the arguments the caller set appear — a line of `language=None issuingplace=None` on
+every call would be noise — and paging options only when changed from their defaults. The
+outcome is the hit count (a floor, `10000+`, when the total is capped), `found` / `not
+found` for a lookup, or the kind of failure; an internal error's traceback is logged
+separately, once, by the same handler. `research_context` is the one argument that exists
+for this line alone: a sentence on what the user is researching, which the tools accept on
+every search so that an operator can see what the corpora are asked for.
+
+At boot the server names its version and each table with its row count —
+`LanceDB at /data-local — tables: df (6,876 rows), tuomiokirjat (7,742,958 rows),
+voudintilit (98,945 rows)` — which is what tells a fixture from the corpus in a deploy log.
+FastMCP's own logger is handed to the same stderr handler, so its warnings (a bad tool
+argument, say) come out as one line in the same format rather than wrapped by a rich console
+at 80 columns.
+
 ## Telemetry is off by default
 
 Nothing is exported unless `KA_MCP_OTEL_ENABLED` is set. With it unset the

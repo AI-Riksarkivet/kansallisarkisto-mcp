@@ -21,6 +21,7 @@ crown's bailiff accounts for the Häme and Satakunta bailiwicks, 1539–1635. Ea
 | `year_max` | int | — | Latest year of the account. |
 | `fuzzy` | int 0-2 | `0` | Edit distance per term. Spelling was never standardised, so `1` is the second attempt when a search looks thin. Pass a base form: a fuzzy term skips stemming. |
 | `match_all` | bool | `true` | Require every word. `false` matches any word — and the total then counts pages matching only one. |
+| `research_context` | string | — | A sentence on what the user is researching. Not searched; written to the server log beside the query, so an operator can see what the corpus is asked for. ra-mcp's tools take the same parameter. |
 
 ## How the filters behave
 
