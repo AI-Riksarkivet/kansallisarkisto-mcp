@@ -8,10 +8,13 @@ kansallisarkisto-mcp is an MCP server over the **Sisältöhaku** corpora of Kans
 the National Archives of Finland. It gives an AI assistant full-text search across
 machine-transcribed archival text, served locally from LanceDB rather than from a live API.
 
-Currently serving **Diplomatarium Fennicum** (`df`) — the scholarly edition of 6,876 medieval
-charters, letters and account entries concerning Finland, 859–1530 — and **`voudintilit`**:
-98,945 pages of the Swedish crown's bailiff accounts for Häme and Satakunta, 1539–1635, each
-cited by its archival reference and linked to its page image in Astia.
+Three corpora: **Diplomatarium Fennicum** (`df`), the scholarly edition of 6,876 medieval
+charters, letters and account entries concerning Finland, 859–1530; **`voudintilit`**, 98,945
+pages of the Swedish crown's bailiff accounts for Häme and Satakunta, 1539–1635; and
+**`tuomiokirjat`**, 7.8 million pages of Finnish lower-court records from 223 archives,
+1610–1931. The pages of the two paged corpora are cited by their archival reference and
+linked to their image in Astia, Kansallisarkisto's digital archive — every voudintilit page,
+and all but a fraction of a percent of the court records.
 
 ## The text is not in Finnish
 
@@ -40,6 +43,11 @@ under their modern name, so `Tallinn` finds 197 charters and `Reval` finds none.
   reference number, account book, year and page — and linked to its image in Astia.
 - **`voudintilit_get_page`** — one page's full text by page id, with the previous and next
   pages of its volume.
+- **`tuomiokirjat_search`** — full-text search over the court-record pages, narrowable by
+  archive, series and year range. Each hit is one page, led by its citation — series, signum,
+  year and page — with the archive beneath, and linked to its image in Astia.
+- **`tuomiokirjat_get_page`** — one court-record page's full text by page id, with the
+  previous and next pages of its volume.
 
 Every DF number resolves to `https://df.kansallisarkisto.fi/document/<number>`, the National
 Archives' own edition of that charter — the link to hand a reader alongside the number.

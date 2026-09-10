@@ -80,8 +80,18 @@ Space's ordinary disk (`KA_MCP_STAGE_DIR`, `/data-local`) and serves the copy. O
 read of the mount at boot is fine; it is the random reads at query time that fail. A copy
 that fails is deleted rather than served, and the server falls back to the mount.
 
+The bucket holds all three tables — `df.lance` (69 MB), `voudintilit.lance` (296 MB) and
+`tuomiokirjat.lance` (21 GB: 11 GB of pages, 11 GB of full-text index). The boot-time copy
+runs at about 26 MB/s off the mount (370 MB took 14 s), so the court records add roughly 14
+minutes to a cold start — inside the Space's 30-minute startup limit, and the reason the
+tuomiokirjat table carries no duplicate search column. Once warm, the server sits at about
+7.5 GB resident with the full index in use, against the free tier's 16 GB; the first query
+after a start pays a few seconds of index warm-up.
+
 To publish new data, mirror `data/` into the bucket (this needs a recent `hf` CLI), then
-restart the Space so it copies the new tables:
+restart the Space so it copies the new tables. **Mirror before deploying a release that adds
+a table**: `/ready` requires every served table, so an image that knows `tuomiokirjat` and a
+bucket that lacks it is 503 until the table arrives, while the other tools work.
 
 ```bash
 hf buckets sync --delete data hf://buckets/Riksarkivet/kansallisarkisto

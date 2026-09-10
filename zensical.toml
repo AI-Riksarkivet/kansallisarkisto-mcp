@@ -29,6 +29,8 @@ nav = [
     {"df_get_charter" = "tools/df-get-charter.md"},
     {"voudintilit_search" = "tools/voudintilit-search.md"},
     {"voudintilit_get_page" = "tools/voudintilit-get-page.md"},
+    {"tuomiokirjat_search" = "tools/tuomiokirjat-search.md"},
+    {"tuomiokirjat_get_page" = "tools/tuomiokirjat-get-page.md"},
   ]},
   { "API" = [
     {"Overview" = "api/index.md"},

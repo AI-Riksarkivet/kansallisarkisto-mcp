@@ -4,7 +4,7 @@ icon: lucide/wrench
 
 # Tools
 
-Four tools, two per corpus — all read-only and all closed-world: they query local LanceDB
+Six tools, two per corpus — all read-only and all closed-world: they query local LanceDB
 tables and reach no network.
 
 | tool | what it does |
@@ -13,6 +13,8 @@ tables and reach no network.
 | [`df_get_charter`](df-get-charter.md) | One charter's full transcript and catalogue record, by DF number. |
 | [`voudintilit_search`](voudintilit-search.md) | Full-text search over the 98,945 pages of the Häme and Satakunta bailiff accounts, narrowable by bailiwick, account book and year range. |
 | [`voudintilit_get_page`](voudintilit-get-page.md) | One page's full text, citation and Astia link, with the previous and next pages of its volume. |
+| [`tuomiokirjat_search`](tuomiokirjat-search.md) | Full-text search over the 7.8 million pages of Finnish lower-court records, 1610–1931, narrowable by archive, series and year range. |
+| [`tuomiokirjat_get_page`](tuomiokirjat-get-page.md) | One court-record page's full text, citation and Astia link, with the previous and next pages of its volume. |
 
 ## The workflow
 
@@ -38,6 +40,18 @@ tables and reach no network.
 4. Cite the page as the hit does, and give the reader its Astia link, which opens the page
    image in Kansallisarkisto's digital archive.
 
+### tuomiokirjat
+
+1. `tuomiokirjat_search` with a Swedish term — the courts wrote Swedish until the late 19th
+   century — narrowed by `collection` (the archive: a court's or district's name) and `series`
+   (the court, or the record type), because common words match more than 10,000 pages.
+2. Read the citation off a hit — series, signum, year and page, such as **Helsingin
+   raastuvanoikeuden tuomiokirjat g:87 1792, p. 45** — and its page id.
+3. `tuomiokirjat_get_page` with the page id for the full text, and the previous and next page
+   ids: a case runs across pages.
+4. Cite the page as the hit does, with the archive named beneath it, and give the reader its
+   Astia link.
+
 ## What every result carries
 
 ### A charter
@@ -59,6 +73,14 @@ tables and reach no network.
 - The **Astia link** to the page image, or `(no Astia link for this page)` where Astia lists
   no image for it.
 
+### A court-record page
+
+- The **citation**, in bold, first: series, the volume's signum, year and page — the archive
+  on the line below, with the subseries where there is one, and the **page id**.
+- A ~400-character text snippet, or `(no text recognised on this page)`.
+- The **Astia link** to the page image, or `(no Astia link for this page)` for the 0.05% of
+  pages the export does not link.
+
 Results end with a `More results available. Use offset=N` line when there is another page.
 
 ## Errors
@@ -69,8 +91,8 @@ Never exceptions — always a sentence:
 - `Error: year range is inverted — from/min (1500) must be <= to/max (1300). Swap the bounds.`
 - `The df table is not available on this server. It is built … with make ingest-df, and
   mounted at KA_LANCEDB_URI; …` — a deployment state an operator can fix, so it is explained
-  in full. The voudintilit tools say the same of their own table, naming
-  `make fetch-astia ingest-voudintilit`.
+  in full. The voudintilit and tuomiokirjat tools say the same of their own tables, naming
+  `make fetch-astia ingest-voudintilit` and `make fetch-astia-tuomiokirjat ingest-tuomiokirjat`.
 
 Anything else is a server fault, and reports only its exception type:
 

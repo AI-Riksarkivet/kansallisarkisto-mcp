@@ -23,11 +23,13 @@
 MCP server over the **Sisältöhaku** corpora of Kansallisarkisto, the National Archives of
 Finland — full-text search across machine-transcribed archival text, served from LanceDB.
 
-Currently serving two corpora: **Diplomatarium Fennicum** (`df`), 6,876 medieval charters,
-letters and account entries concerning Finland, 859–1530; and **`voudintilit`**, 98,945 pages
-of the Swedish crown's bailiff accounts for Häme and Satakunta, 1539–1635, each cited by its
-archival reference and linked to its page image in Astia. The largest, `tuomiokirjat`
-(7,835,557 court-record pages, 1600s–1900s), is harvested and documented but not yet ingested.
+Three corpora: **Diplomatarium Fennicum** (`df`), 6,876 medieval charters, letters and
+account entries concerning Finland, 859–1530; **`voudintilit`**, 98,945 pages of the Swedish
+crown's bailiff accounts for Häme and Satakunta, 1539–1635; and **`tuomiokirjat`**, 7.8
+million pages of Finnish lower-court records from 223 archives, 1610–1931. The pages of the
+two paged corpora are cited by their archival reference and linked to their image in Astia,
+Kansallisarkisto's digital archive — every voudintilit page, and all but a fraction of a
+percent of the court records.
 
 The range is wide but the weight is late: 83% of `df` falls in 1400–1530 and barely 240
 charters predate 1300, so a thin result for an early century is the archive rather than the
@@ -130,6 +132,18 @@ For `voudintilit`:
 - `voudintilit_get_page(page_id)` — one page's full text, with the ids of the previous and next
   pages in its volume: accounts run across pages.
 
+For `tuomiokirjat`:
+
+- `tuomiokirjat_search(keyword, offset=0, limit=25, collection?, series?, year_min?, year_max?, match_all=true, fuzzy=0)`
+  — full-text search over the court-record pages, in Swedish. `collection` is the archive and
+  `series` the series, both substrings (`Turun raastuvanoikeuden`, `Varsinaisten asioiden`);
+  common words match more than 10,000 pages — the result then says so and how to narrow. As
+  for voudintilit, `|` works and a prefix `*` does not. Each hit is one page, led by its
+  citation — series, signum, year and page, such as **Helsingin raastuvanoikeuden tuomiokirjat
+  g:87 1792, p. 45** — with the archive beneath, and linked to its image.
+- `tuomiokirjat_get_page(page_id)` — one page's full text, with the previous and next pages
+  of its volume: a case runs across pages.
+
 ## Run locally
 
 No corpus ships with this repository — `.data/` and `data/` are both git-ignored, and the
@@ -143,8 +157,15 @@ make fetch-astia          # ~3,200 requests to Astia, resumable
 make ingest-voudintilit
 ```
 
-`tuomiokirjat` is a different proposition — about 1.5 hours and 6.3 GB — and is not ingested
-yet.
+`tuomiokirjat` is a different proposition: the harvest is about 1.5 hours and 6.3 GB, the
+Astia snapshot 12,284 requests, and the ingest about 20 minutes with 7 GiB of memory for a
+table of 21 GB:
+
+```bash
+uv run python scripts/harvest.py --index tuomiokirjat
+make fetch-astia-tuomiokirjat
+make ingest-tuomiokirjat
+```
 
 ```bash
 uv run python scripts/harvest.py --index all        # all three corpora (6.3 GB)

@@ -10,7 +10,7 @@ documents** — 19.4 GB of text — spanning **859 to 1938**.
 
 | corpus | documents | text | period | content | ingested |
 |---|---:|---:|---|---|---|
-| `tuomiokirjat` | 7,835,557 | 19.25 GB | 1600s–1900s | Court records | not yet |
+| `tuomiokirjat` | 7,835,557 | 19.25 GB | 1610–1931 | Court records | **yes** |
 | `voudintilit` | 98,945 | 131 MB | 1539–1635 | Bailiff accounts | **yes** |
 | `df` | 6,876 | 7.4 MB | 859–1530 | Medieval charters | **yes** |
 
@@ -223,6 +223,80 @@ the page comes back, retrying with its next-rarest words where the index splits 
 differently. **96,978 of the 98,945 pages** come back by a word of their own. The other 1,967
 are inconclusive rather than lost — once stemmed, even their rarest words return more than the
 100 results the sweep read, so the page may simply rank beyond them. None was missed.
+
+## `tuomiokirjat` — court records
+
+The judgement books and minutes of Finland's lower courts, 1610–1931: the town courts
+(*raastuvanoikeus*), the district courts (*kihlakunnanoikeus*, arranged by *tuomiokunta*), the
+town bailiffs' courts (*kämnerinoikeus*), the land-partition courts, and the Vaasa and Viipuri
+appeal courts — 223 archives in all, 444 series, 12,284 volumes. A record is a **page**: one
+image of one volume, and a case runs across pages. The courts wrote Swedish until the late 19th
+century; only the archive and series names are Finnish.
+
+| source field | type | becomes | meaning |
+|---|---|---|---|
+| `objectID` | string | `page_id` | Sisältöhaku's own document id — the handle `tuomiokirjat_get_page` takes |
+| `ay_id` | int | `volume_id` | The volume; Astia's `aineistoId` |
+| `file_id` | int *or* zero-padded string | `file_id`, `page` | The page within the volume |
+| `aineistokokonaisuus` | string | `collection` | The archive — *Turun raastuvanoikeuden renovoidut tuomiokirjat*, *Etelä-Pohjanmaan tuomiokunnan renovoidut tuomiokirjat*, *Viipurin hovioikeuden arkisto* |
+| `pääsarja` | string | `series` | The series — a court's name for the 17th–18th-century town courts, the record type (*Varsinaisten asioiden pöytäkirjat*, *Ilmoitusasioiden pöytäkirjat*) for the later district courts |
+| `alasarja1`–`3` | string | `subseries` | Up to three levels below the series, joined with ` / `; set on 746k pages |
+| `arkistoyksikkö` | string | `unit` | The record type of the volume |
+| `alkuvuosi`, `loppuvuosi` | int *or* string | `year_start`, `year_end`, `year_from`, `year_to` | The volume's years |
+| `teksti` | string | `text` | Transcribed text — and the column the full-text index is built on |
+| `url` | string | `url` | The page image in Astia, present for 99.95% of pages |
+
+Plus the volume's `reference` — its signum, such as `a:1` or `KO b:34` — joined from Astia.
+
+**There is no derived search column.** df and voudintilit index a `searchable_text` that folds
+catalogue fields in with the text, so that an untranscribed charter or an untitled volume
+stays findable. Here nothing is worth folding in — the archive and series are filters — and a
+duplicate of 7.8 million pages of text would cost 10 GB on disk and as much again in the copy
+the Space makes at boot. So the index sits on `text` itself, and the shared search takes the
+column as `fts_column`.
+
+### Citations come from Astia, as for voudintilit
+
+The export links 99.95% of pages but names no signum. One metadata request per volume —
+`make fetch-astia-tuomiokirjat`, 12,284 requests, resumable — supplies it for 12,042 of the
+12,284 volumes (240 carry none in Astia; two returned errors), so a hit can be cited as
+archivists cite these: **series, signum, year, page**, with the archive beneath.
+
+### Its traps
+
+**One image, two or three ids.** 60,000 `(volume, page)` pairs appear more than once in the
+export under distinct `objectID`s — the same link and years, identical text in 72% of cases and
+a re-recognised version in the rest. That is Sisältöhaku's own duplication, not the harvest's:
+the harvester verifies its `objectID`s unique. The ingest keeps the first occurrence of each
+pair, so no page is ever two hits; and because the pair is not unique, the page id is the
+`objectID` rather than `<volume>_<page>` as for voudintilit.
+
+**Mixed field types.** 315,000 rows carry their years as strings and 896,000 their page number
+— the latter zero-padded, as voudintilit's always are; 892,000 of those also take the
+`<volume>_<page>` id form voudintilit uses, the rest an Elasticsearch id. Both parse; the schema is declared so
+the two shapes land in one column.
+
+**Inverted years, in both directions.** 703 pages have the end year before the start. One
+Kristiinankaupunki volume of 139 pages reads 1984–1895 — the *start* is the slip, since the
+courts in this corpus sat until 1931 — where voudintilit's one inverted volume read 1615–1516
+with the *end* out of range. So the rule is: when inverted, keep the bound that lies within the
+corpus's plausible range, and the start when both do.
+
+**83 undated pages**, all in one Hamina archive, are left out of any year filter, as the
+undated voudintilit catalogue is.
+
+**The corpus is uneven in time.** The whole 17th century is 240,000 pages, the 1910s alone 1.1
+million — the district courts' registration books of the late Grand Duchy. A thin result for
+an early decade is the archive.
+
+### Can every page be found?
+
+Sweeping all 7.7 million pages by their own rarest words would take a day, so the check was
+run on a sample: page 17 and page 318 of every volume that has them, 20,000 pages spread over
+the whole corpus. **16,123 came back** by a word of their own; 3,865 were inconclusive — on a
+corpus this size even a page's rarest word is often common enough to return more than the 100
+results read, so the page may simply rank beyond them; 12 had no word of four letters; **none
+was missed**.
 
 ## Choosing an analyzer
 

@@ -31,7 +31,20 @@ with the Astia snapshot `make fetch-astia` writes beside it — each volume's ar
 and each page's image link, which the export itself lacks. Without the snapshot the pages
 are still ingested, but carry neither.
 
-Both directories are git-ignored: `.data/` is the 6.3 GB harvest, `data/` is derived from it.
+`tuomiokirjat` is the large one — 7.8 million pages:
+
+```bash
+uv run python scripts/harvest.py --index tuomiokirjat   # ~1.5 h, 6.3 GB
+make fetch-astia-tuomiokirjat                            # 12,284 requests, ~1.5 h, resumable
+make ingest-tuomiokirjat                                 # ~20 min, ~7 GiB of memory, 21 GB on disk
+```
+
+The ingest keeps one record per image (Sisältöhaku holds 60,000 twice), and builds the
+full-text index with one shard and 256 MiB partitions — settings the script fixes before
+lance loads, because with lance's defaults the build needs more memory than most machines
+have spare.
+
+Both directories are git-ignored: `.data/` is the harvest, `data/` is derived from it.
 
 Point an ingest elsewhere if your export lives somewhere else:
 
