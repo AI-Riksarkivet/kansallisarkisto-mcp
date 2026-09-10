@@ -5,8 +5,9 @@ from __future__ import annotations
 import atexit
 import logging
 import sys
+from pathlib import Path
 
-from ra_mcp_kansallisarkisto_lib.config import DF_TABLE
+from ra_mcp_kansallisarkisto_lib.config import DF_TABLE, stage_lancedb
 from ra_mcp_kansallisarkisto_lib.dataset import get_lancedb, table_names
 from ra_mcp_kansallisarkisto_lib.search_operations import DfSearch
 from ra_mcp_kansallisarkisto_mcp.settings import settings
@@ -19,6 +20,22 @@ logger = logging.getLogger(__name__)
 # being tested is whether the query can run at all, which means touching the
 # full-text index files that a listing of table names never opens.
 PROBE_KEYWORD = "probe"
+
+
+def stage_tables() -> None:
+    """Copy the tables onto local disk before anything reads them, when asked to.
+
+    Opt-in via KA_MCP_STAGE_DATASETS, for a Hugging Face Space — see
+    ra_mcp_kansallisarkisto_lib.config.stage_lancedb for why. On success every later
+    read of settings.lancedb_uri, the boot check's and the tools' alike, resolves to
+    the copy. On failure the configured URI stands, so the server still boots and
+    reports what it found there.
+    """
+    if not settings.ka_mcp_stage_datasets:
+        return
+    staged = stage_lancedb(settings.lancedb_uri, Path(settings.ka_mcp_stage_dir))
+    if staged is not None:
+        settings.ka_lancedb_uri = staged
 
 
 def log_table_status() -> None:
@@ -91,6 +108,8 @@ def main() -> None:
     # last batch of spans.
     init_telemetry()
     atexit.register(shutdown_telemetry)
+    # Before the boot check, so the check inspects the copy the server will serve.
+    stage_tables()
     log_table_status()
     if settings.ka_mcp_transport == "http":
         # Behind a TLS-terminating proxy, uvicorn must trust X-Forwarded-Proto or it builds

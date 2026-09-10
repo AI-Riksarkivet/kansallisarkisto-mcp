@@ -9,6 +9,7 @@ import pytest
 
 from ra_mcp_kansallisarkisto_lib.ingest import ingest_df
 from ra_mcp_kansallisarkisto_mcp import server
+from ra_mcp_kansallisarkisto_mcp.settings import Settings
 
 
 class RunRecorder:
@@ -103,3 +104,49 @@ def test_boot_probe_explains_an_unreadable_table(caplog, monkeypatch, tmp_path, 
         server.log_table_status()
     assert "cannot be queried" in caplog.text
     assert "--chown=1000:1000" in caplog.text
+
+
+def test_staging_is_off_by_default():
+    assert Settings.model_fields["ka_mcp_stage_datasets"].default is False
+
+
+def test_main_stages_before_the_boot_check(recorder, monkeypatch):
+    """The boot check has to look at the copy the server will actually serve."""
+    order: list[str] = []
+    monkeypatch.setattr(server, "stage_tables", lambda: order.append("stage"))
+    monkeypatch.setattr(server, "log_table_status", lambda: order.append("status"))
+    monkeypatch.setattr(server.settings, "ka_mcp_transport", "stdio")
+    server.main()
+    assert order == ["stage", "status"]
+
+
+def test_boot_staging_serves_the_local_copy(caplog, monkeypatch, tmp_path, df_fixture):
+    """On a Space the mount is a FUSE layer lance cannot query under load, so the
+    server must read the copy, not the mount."""
+    mount, local = str(tmp_path / "mount"), tmp_path / "local"
+    ingest_df(lancedb.connect(mount), df_fixture)
+    monkeypatch.setattr(server.settings, "ka_lancedb_uri", mount)
+    monkeypatch.setattr(server.settings, "ka_mcp_stage_datasets", True)
+    monkeypatch.setattr(server.settings, "ka_mcp_stage_dir", str(local))
+    server.stage_tables()
+    assert server.settings.lancedb_uri == str(local)
+    with caplog.at_level(logging.INFO):
+        server.log_table_status()
+    assert f"LanceDB at {local} — tables: df" in caplog.text
+
+
+def test_boot_staging_off_leaves_the_configured_uri(monkeypatch, tmp_path):
+    monkeypatch.setattr(server.settings, "ka_lancedb_uri", str(tmp_path / "mount"))
+    monkeypatch.setattr(server.settings, "ka_mcp_stage_datasets", False)
+    server.stage_tables()
+    assert server.settings.lancedb_uri == str(tmp_path / "mount")
+
+
+def test_failed_staging_falls_back_to_the_configured_uri(monkeypatch, tmp_path):
+    """Nothing to copy is not fatal: the server serves the configured URI, and the
+    boot check reports the missing table exactly as it would without staging."""
+    monkeypatch.setattr(server.settings, "ka_lancedb_uri", str(tmp_path / "absent"))
+    monkeypatch.setattr(server.settings, "ka_mcp_stage_datasets", True)
+    monkeypatch.setattr(server.settings, "ka_mcp_stage_dir", str(tmp_path / "local"))
+    server.stage_tables()
+    assert server.settings.lancedb_uri == str(tmp_path / "absent")

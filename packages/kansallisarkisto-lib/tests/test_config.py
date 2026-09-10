@@ -70,3 +70,73 @@ def test_project_root_is_this_workspace():
     assert root is not None
     assert (root / "pyproject.toml").exists()
     assert Path(__file__).is_relative_to(root)
+
+
+# --- staging: copying the tables onto local disk before serving them ---------
+
+
+def _table_dir(root: Path, content: str = "rows") -> Path:
+    (root / "df.lance").mkdir(parents=True)
+    (root / "df.lance" / "data.lance").write_text(content)
+    return root
+
+
+def test_staging_copies_the_tables_onto_local_disk(tmp_path):
+    source, target = _table_dir(tmp_path / "mount"), tmp_path / "local"
+    assert config.stage_lancedb(str(source), target) == str(target)
+    assert (target / "df.lance" / "data.lance").read_text() == "rows"
+
+
+def test_staging_reuses_a_finished_copy(tmp_path):
+    """A process restarted inside the same container must not copy the tables again."""
+    source, target = _table_dir(tmp_path / "mount", "new"), _table_dir(tmp_path / "local", "old")
+    (target / ".staged").touch()
+    assert config.stage_lancedb(str(source), target) == str(target)
+    assert (target / "df.lance" / "data.lance").read_text() == "old"
+
+
+def test_staging_skips_a_source_that_is_not_there(tmp_path):
+    """Nothing mounted: serve the configured URI as it is, and let the boot check say so."""
+    target = tmp_path / "local"
+    assert config.stage_lancedb(str(tmp_path / "absent"), target) is None
+    assert not target.exists()
+
+
+def test_staging_skips_object_storage(tmp_path):
+    """lancedb reads s3:// and gs:// itself; there is no directory to copy."""
+    assert config.stage_lancedb("s3://bucket/lance", tmp_path / "local") is None
+
+
+def test_a_failed_copy_is_removed_rather_than_served(monkeypatch, tmp_path):
+    """A half-copied table would look present and then fail every search."""
+    source, target = _table_dir(tmp_path / "mount"), tmp_path / "local"
+
+    def partial_copy(src: Path, dst: Path) -> None:
+        (dst / "df.lance").mkdir(parents=True)
+        raise OSError(5, "Input/output error")
+
+    monkeypatch.setattr(config, "_copy_tree", partial_copy)
+    assert config.stage_lancedb(str(source), target) is None
+    assert list(tmp_path.glob("local*")) == []
+
+
+def test_an_interrupted_copy_is_not_mistaken_for_a_staged_one(tmp_path):
+    """A process killed mid-copy never reaches its cleanup, and the restart that reuse
+    exists for would then serve the fragment for good. Only a copy that finished — and
+    marked itself so — is reused; anything else in the target is discarded and redone."""
+    source, target = _table_dir(tmp_path / "mount", "new"), tmp_path / "local"
+    (target / "df.lance").mkdir(parents=True)
+    assert config.stage_lancedb(str(source), target) == str(target)
+    assert (target / "df.lance" / "data.lance").read_text() == "new"
+
+
+def test_staging_that_cannot_even_look_falls_back(monkeypatch, tmp_path):
+    """An I/O error just listing the mount — the FUSE layer's EIO — must not take the
+    boot down; the server falls back to the configured URI like any other failure."""
+    source, target = _table_dir(tmp_path / "mount"), tmp_path / "local"
+
+    def unreadable(path: Path) -> bool:
+        raise OSError(5, "Input/output error")
+
+    monkeypatch.setattr(config, "_is_populated", unreadable)
+    assert config.stage_lancedb(str(source), target) is None

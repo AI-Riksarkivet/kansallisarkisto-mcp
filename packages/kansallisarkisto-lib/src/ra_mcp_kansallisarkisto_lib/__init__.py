@@ -1,6 +1,6 @@
 """Kansallisarkisto Sisältöhaku corpora — LanceDB ingest and full-text search."""
 
-from .config import DEFAULT_LIMIT, DF_TABLE, MAX_LIMIT, resolve_lancedb_uri
+from .config import DEFAULT_LIMIT, DF_TABLE, MAX_LIMIT, resolve_lancedb_uri, stage_lancedb
 from .dataset import (
     MAX_TOTAL_COUNT,
     SearchInputError,
@@ -36,5 +36,6 @@ __all__ = [
     "require_keyword",
     "require_ordered_range",
     "resolve_lancedb_uri",
+    "stage_lancedb",
     "table_names",
 ]
