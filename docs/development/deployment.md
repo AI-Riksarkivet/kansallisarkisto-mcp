@@ -81,10 +81,12 @@ read of the mount at boot is fine; it is the random reads at query time that fai
 that fails is deleted rather than served, and the server falls back to the mount.
 
 The bucket holds all three tables — `df.lance` (69 MB), `voudintilit.lance` (296 MB) and
-`tuomiokirjat.lance` (21 GB: 11 GB of pages, 11 GB of full-text index). The boot-time copy
-runs at about 26 MB/s off the mount (370 MB took 14 s), so the court records add roughly 14
-minutes to a cold start — inside the Space's 30-minute startup limit, and the reason the
-tuomiokirjat table carries no duplicate search column. Once warm, the server sits at about
+`tuomiokirjat.lance` (22 GB: 11 GB of pages, 11 GB of full-text index). The boot-time copy
+runs at about 100 MB/s off the mount — measured on the v0.3.0 deploy: all 22 GB staged in
+220 s — so a cold start takes about four minutes before the court records serve, well inside
+the Space's 30-minute startup limit. (A small copy looks far slower, 370 MB in 14 s, because
+the mount's per-file cost dominates it.) The size is still the reason the tuomiokirjat table
+carries no duplicate search column. Once warm, the server sits at about
 7.5 GB resident with the full index in use, against the free tier's 16 GB; the first query
 after a start pays a few seconds of index warm-up.
 

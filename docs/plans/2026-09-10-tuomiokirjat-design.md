@@ -51,8 +51,9 @@ Measured over the whole export (7,835,557 lines):
 
 So the index builds on this machine with the frugal settings — memory grows about 0.7 GiB
 per million pages from a 2 GiB base — and 256 MiB partitions beat 64 MiB on both peak and
-index size. The Space copies the bucket at ~26 MB/s (370 MB in 14 s), so 21 GB is about 14
-minutes of boot, within the 30-minute startup limit.
+index size. The Space copied the whole 22 GB in 220 s on the v0.3.0 deploy — about 100 MB/s, so a
+cold start is about four minutes, well within the 30-minute startup limit (the earlier
+26 MB/s figure came from a 370 MB copy dominated by per-file cost).
 
 ## Decided by the measurements
 
