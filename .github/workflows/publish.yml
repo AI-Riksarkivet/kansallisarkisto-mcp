@@ -86,7 +86,7 @@ jobs:
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_SECRET }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and push with attestations
         id: build
@@ -198,4 +198,4 @@ jobs:
       digest: ${{ needs.publish.outputs.digest }}
     secrets:
       registry-username: ${{ secrets.DOCKERHUB_USERNAME }}
-      registry-password: ${{ secrets.DOCKERHUB_SECRET }}
+      registry-password: ${{ secrets.DOCKERHUB_TOKEN }}
