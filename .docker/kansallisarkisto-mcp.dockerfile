@@ -68,10 +68,15 @@ RUN set -eux; \
 # shipped. Mount a LanceDB directory at /data (the default the server resolves to
 # when there is no project root), or point KA_LANCEDB_URI at object storage.
 # Without either the server still boots and every tool call says the table is missing.
+# FastMCP fetches pypi.org at every boot to check for a newer version and prints a
+# console banner over several lines — neither is a thing a production server should
+# do or log. Both are its own settings, off here.
 ENV KA_MCP_TRANSPORT=http \
     KA_LANCEDB_URI=/data \
     HOST=0.0.0.0 \
-    PORT=8000
+    PORT=8000 \
+    FASTMCP_CHECK_FOR_UPDATES=off \
+    FASTMCP_SHOW_SERVER_BANNER=false
 EXPOSE 8000
 # No VOLUME declaration: it would make every `docker run` without -v create an
 # anonymous volume to accumulate, and the bind mount works without it.

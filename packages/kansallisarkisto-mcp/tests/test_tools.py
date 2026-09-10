@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import inspect
 import json
+import logging
 
 import pytest
 from fastmcp import Client
@@ -301,6 +302,90 @@ async def test_court_prefix_search_is_refused_with_advice(tuomiokirjat_search, m
     out = await call("tuomiokirjat_search", {"keyword": "Lars*"})
     assert out.startswith("Error: prefix search")
     assert "bref|breff" in out and "fuzzy=1" in out
+
+
+# --- what an operator sees per call ------------------------------------------
+#
+# The Space runs without OTel, so the log is the only signal there — and until
+# now it showed "Processing request of type CallToolRequest" and nothing else.
+# Every tool now logs one line: which tool, what it was asked, what came of it,
+# and how long it took.
+
+LOG = "ra_mcp_kansallisarkisto_mcp.errors"
+
+
+async def test_every_search_logs_what_it_was_asked_and_what_it_found(caplog, df_search, voudintilit_search, tuomiokirjat_search):
+    tools._search, tools._voudintilit_search, tools._tuomiokirjat_search = df_search, voudintilit_search, tuomiokirjat_search
+    with caplog.at_level(logging.INFO, logger=LOG):
+        await call("df_search", {"keyword": "Raseborg", "year_min": 1444, "year_max": 1444})
+        await call("voudintilit_search", {"keyword": "smör", "collection": "hame"})
+        await call("tuomiokirjat_search", {"keyword": "Larsson", "series": "Porin"})
+    lines = [r.getMessage() for r in caplog.records if r.name == LOG]
+    assert len(lines) == 3
+    assert "df_search keyword='Raseborg' year_min=1444 year_max=1444 -> 1 hit" in lines[0]
+    assert "voudintilit_search keyword='smör' collection='hame' ->" in lines[1] and "hits" in lines[1]
+    assert "tuomiokirjat_search keyword='Larsson' series='Porin' ->" in lines[2]
+    assert all(" ms" in line for line in lines)
+
+
+async def test_unset_filters_are_not_logged(caplog, df_search):
+    """A line of 'language=None issuingplace=None …' on every call is noise."""
+    tools._search = df_search
+    with caplog.at_level(logging.INFO, logger=LOG):
+        await call("df_search", {"keyword": "Raseborg"})
+    line = next(r.getMessage() for r in caplog.records if r.name == LOG)
+    assert "None" not in line
+
+
+async def test_page_lookups_log_found_or_not(caplog, df_search, tuomiokirjat_search):
+    tools._search, tools._tuomiokirjat_search = df_search, tuomiokirjat_search
+    with caplog.at_level(logging.INFO, logger=LOG):
+        await call("df_get_charter", {"df_number": 526})
+        await call("df_get_charter", {"df_number": 999999})
+        await call("tuomiokirjat_get_page", {"page_id": "Y4Q4IZcBCao99UPKS6L8"})
+    lines = [r.getMessage() for r in caplog.records if r.name == LOG]
+    assert "df_get_charter df_number=526 -> found" in lines[0]
+    assert "df_get_charter df_number=999999 -> not found" in lines[1]
+    assert "tuomiokirjat_get_page page_id='Y4Q4IZcBCao99UPKS6L8' -> found" in lines[2]
+
+
+async def test_failures_are_logged_with_their_kind(caplog, df_search, monkeypatch, tmp_path):
+    tools._search = df_search
+    with caplog.at_level(logging.INFO, logger=LOG):
+        await call("df_search", {"keyword": '"de ecclesia"', "fuzzy": 1})
+    assert "df_search" in caplog.text and "-> validation: fuzzy=1 cannot be combined" in caplog.text
+
+    def boom(*_args, **_kwargs):
+        raise RuntimeError("lance exploded: /data/df.lance/_versions/3.manifest")
+
+    monkeypatch.setattr(df_search, "search", boom)
+    caplog.clear()
+    with caplog.at_level(logging.INFO, logger=LOG):
+        await call("df_search", {"keyword": "konung"})
+    line = next(r.getMessage() for r in caplog.records if r.name == LOG and r.levelno == logging.INFO)
+    assert "df_search keyword='konung' -> RuntimeError" in line
+
+    tools._search = None
+    monkeypatch.setattr(tools.settings, "ka_lancedb_uri", str(tmp_path / "empty"))
+    caplog.clear()
+    with caplog.at_level(logging.INFO, logger=LOG):
+        await call("df_search", {"keyword": "konung"})
+    assert "df_search keyword='konung' -> missing table" in caplog.text
+
+
+async def test_research_context_is_accepted_and_logged(caplog, df_search, voudintilit_search, tuomiokirjat_search):
+    """ra-mcp's tools take research_context, so clients send it here too — and the
+    whole call was being rejected as an unexpected argument. It is the 'why' behind
+    a query, worth a place in the log."""
+    tools._search, tools._voudintilit_search, tools._tuomiokirjat_search = df_search, voudintilit_search, tuomiokirjat_search
+    with caplog.at_level(logging.INFO, logger=LOG):
+        out = await call("df_search", {"keyword": "Raseborg", "research_context": "Raseborg castle's garrison"})
+        await call("voudintilit_search", {"keyword": "smör", "research_context": "butter tithes"})
+        await call("tuomiokirjat_search", {"keyword": "Larsson", "research_context": "a Pori burgher"})
+    assert "Diplomatarium Fennicum search results" in out
+    assert 'research_context="Raseborg castle\'s garrison"' in caplog.text
+    assert "research_context='butter tithes'" in caplog.text
+    assert "research_context='a Pori burgher'" in caplog.text
 
 
 async def test_court_missing_table_is_reported_as_text(monkeypatch, tmp_path):

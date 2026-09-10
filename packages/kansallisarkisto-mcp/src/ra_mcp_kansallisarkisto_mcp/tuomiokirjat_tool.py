@@ -16,7 +16,7 @@ from pydantic import Field
 from ra_mcp_kansallisarkisto_lib.config import DEFAULT_LIMIT, MAX_LIMIT
 from ra_mcp_kansallisarkisto_lib.dataset import require_keyword, require_ordered_range
 from ra_mcp_kansallisarkisto_lib.telemetry import mark_span_error
-from ra_mcp_kansallisarkisto_mcp.errors import answer
+from ra_mcp_kansallisarkisto_mcp.errors import Answer, answer, found, paging, summary
 from ra_mcp_kansallisarkisto_mcp.formatter import format_court_page, format_tuomiokirjat_results
 
 
@@ -124,6 +124,10 @@ def register_tuomiokirjat_tools(mcp: FastMCP, get_search) -> None:
                 le=2,
             ),
         ] = 0,
+        research_context: Annotated[
+            str | None,
+            Field(description="Brief summary of the user's research goal. Used for logging only."),
+        ] = None,
     ) -> str:
         if err := require_keyword(keyword, "'hustru' or 'Larsson'"):
             mark_span_error(err, "validation")
@@ -131,21 +135,21 @@ def register_tuomiokirjat_tools(mcp: FastMCP, get_search) -> None:
         if err := require_ordered_range(year_min, year_max, "year"):
             mark_span_error(err, "validation")
             return err
+
+        def run() -> Answer:
+            result = get_search().search(keyword, limit=limit, offset=offset, collection=collection, series=series, year_min=year_min, year_max=year_max, match_all=match_all, fuzzy=fuzzy)
+            return format_tuomiokirjat_results(result), summary(result)
+
         return answer(
             "tuomiokirjat_search",
-            lambda: format_tuomiokirjat_results(
-                get_search().search(
-                    keyword,
-                    limit=limit,
-                    offset=offset,
-                    collection=collection,
-                    series=series,
-                    year_min=year_min,
-                    year_max=year_max,
-                    match_all=match_all,
-                    fuzzy=fuzzy,
-                )
-            ),
+            run,
+            keyword=keyword,
+            collection=collection,
+            series=series,
+            year_min=year_min,
+            year_max=year_max,
+            research_context=research_context,
+            **paging(offset, limit, match_all, fuzzy),
         )
 
     @mcp.tool(
@@ -164,4 +168,9 @@ def register_tuomiokirjat_tools(mcp: FastMCP, get_search) -> None:
     def tuomiokirjat_get_page(
         page_id: Annotated[str, Field(description="The page id from a tuomiokirjat_search hit, e.g. 'Y4Q4IZcBCao99UPKS6L8'.")],
     ) -> str:
-        return answer("tuomiokirjat_get_page", lambda: format_court_page(get_search().get_page(page_id), page_id))
+
+        def run() -> Answer:
+            page = get_search().get_page(page_id)
+            return format_court_page(page, page_id), found(page)
+
+        return answer("tuomiokirjat_get_page", run, page_id=page_id)

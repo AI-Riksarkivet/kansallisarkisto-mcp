@@ -6,6 +6,7 @@ import atexit
 import logging
 import sys
 from collections.abc import Callable
+from importlib.metadata import version
 from pathlib import Path
 from typing import Any
 
@@ -54,13 +55,16 @@ def log_table_status() -> None:
     """
     uri = settings.lancedb_uri
     try:
-        tables = table_names(get_lancedb(uri))
+        db = get_lancedb(uri)
+        tables = table_names(db)
+        # Row counts are metadata reads, cheap even on 7.7M rows — and they are what
+        # tells a fixture table from the corpus in a deploy log.
+        present = ", ".join(f"{table} ({db.open_table(table).count_rows():,} rows)" for table in tables) or "(none)"
     except Exception:
         # A traceback is worth having here: an unopenable database at boot is a
         # deployment fault (wrong URI, unreadable mount), not a user error.
         logger.exception("Cannot open the LanceDB database at %s", uri)
         return
-    present = ", ".join(tables) or "(none)"
     logger.info("LanceDB at %s — tables: %s", uri, present)
 
     # Built here rather than at import, so a test can swap either facade.
@@ -103,14 +107,30 @@ def probe_table_readable(uri: str, table: str, facade: Callable[[Any], Any]) -> 
         )
 
 
-def main() -> None:
-    # stderr keeps stdio transport clean (stdout is the protocol channel) and is
-    # what container log viewers surface.
+def configure_logging() -> None:
+    """One plain-text handler on stderr for every logger, FastMCP's included.
+
+    stderr keeps stdio transport clean (stdout is the protocol channel) and is what
+    container log viewers surface. FastMCP installs a rich handler on its own logger
+    at import and stops its records reaching the root — so its one-line warning
+    about a bad tool argument came out wrapped over seven lines at console width,
+    in a different format from every other line. Handing that logger back to the
+    root puts every record through the same handler.
+    """
     logging.basicConfig(
         level=settings.log_level.upper(),
         stream=sys.stderr,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+    fastmcp_logger = logging.getLogger("fastmcp")
+    for handler in fastmcp_logger.handlers[:]:
+        fastmcp_logger.removeHandler(handler)
+    fastmcp_logger.propagate = True
+
+
+def main() -> None:
+    configure_logging()
+    logger.info("kansallisarkisto-mcp %s", version("ra-mcp-kansallisarkisto-mcp"))
     # Before anything that might be worth tracing, and after logging is
     # configured so the log bridge picks up the same root logger. A no-op unless
     # KA_MCP_OTEL_ENABLED is set. The atexit flush matters most for stdio, where

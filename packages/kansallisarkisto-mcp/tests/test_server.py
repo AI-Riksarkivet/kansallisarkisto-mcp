@@ -57,13 +57,38 @@ def test_unknown_transport_fails_loudly_instead_of_hanging_on_stdio(recorder, mo
     assert recorder.calls == []
 
 
-def test_present_table_is_reported_at_boot(caplog, monkeypatch, tmp_path, df_fixture):
+def test_present_table_is_reported_at_boot_with_its_size(caplog, monkeypatch, tmp_path, df_fixture):
+    """'tables: df' says a table is there; the row count says whether it is the
+    corpus or a fixture — the difference between a deploy and a mistake."""
     uri = str(tmp_path / "db")
     ingest_df(lancedb.connect(uri), df_fixture)
     monkeypatch.setattr(server.settings, "ka_lancedb_uri", uri)
     with caplog.at_level(logging.INFO):
         server.log_table_status()
-    assert "tables: df" in caplog.text
+    assert "tables: df (19 rows)" in caplog.text
+
+
+def test_boot_names_the_version(caplog, monkeypatch):
+    """The Space log is the only place to learn which release is serving."""
+    monkeypatch.setattr(server, "kansallisarkisto_mcp", RunRecorder())
+    monkeypatch.setattr(server, "log_table_status", lambda: None)
+    monkeypatch.setattr(server.settings, "ka_mcp_transport", "stdio")
+    with caplog.at_level(logging.INFO):
+        server.main()
+    assert "kansallisarkisto-mcp 0." in caplog.text
+
+
+def test_fastmcp_logs_through_the_root_handler(monkeypatch):
+    """FastMCP installs a rich handler on its own logger that wraps a one-line
+    warning over seven at console width, and keeps it from the root handler. After
+    main() its records go where ours go, in the same format."""
+    monkeypatch.setattr(server, "kansallisarkisto_mcp", RunRecorder())
+    monkeypatch.setattr(server, "log_table_status", lambda: None)
+    monkeypatch.setattr(server.settings, "ka_mcp_transport", "stdio")
+    server.main()
+    fastmcp_logger = logging.getLogger("fastmcp")
+    assert fastmcp_logger.handlers == []
+    assert fastmcp_logger.propagate is True
 
 
 def test_missing_table_is_reported_at_boot(caplog, monkeypatch, tmp_path):

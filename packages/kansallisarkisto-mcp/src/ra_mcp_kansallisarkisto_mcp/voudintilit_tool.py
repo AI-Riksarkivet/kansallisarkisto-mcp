@@ -16,7 +16,7 @@ from pydantic import Field
 from ra_mcp_kansallisarkisto_lib.config import DEFAULT_LIMIT, MAX_LIMIT
 from ra_mcp_kansallisarkisto_lib.dataset import require_keyword, require_ordered_range
 from ra_mcp_kansallisarkisto_lib.telemetry import mark_span_error
-from ra_mcp_kansallisarkisto_mcp.errors import answer
+from ra_mcp_kansallisarkisto_mcp.errors import Answer, answer, found, paging, summary
 from ra_mcp_kansallisarkisto_mcp.formatter import format_page, format_voudintilit_results
 
 
@@ -107,6 +107,10 @@ def register_voudintilit_tools(mcp: FastMCP, get_search) -> None:
                 le=2,
             ),
         ] = 0,
+        research_context: Annotated[
+            str | None,
+            Field(description="Brief summary of the user's research goal. Used for logging only."),
+        ] = None,
     ) -> str:
         if err := require_keyword(keyword, "'smör' or 'konung'"):
             mark_span_error(err, "validation")
@@ -114,21 +118,21 @@ def register_voudintilit_tools(mcp: FastMCP, get_search) -> None:
         if err := require_ordered_range(year_min, year_max, "year"):
             mark_span_error(err, "validation")
             return err
+
+        def run() -> Answer:
+            result = get_search().search(keyword, limit=limit, offset=offset, collection=collection, account_book=account_book, year_min=year_min, year_max=year_max, match_all=match_all, fuzzy=fuzzy)
+            return format_voudintilit_results(result), summary(result)
+
         return answer(
             "voudintilit_search",
-            lambda: format_voudintilit_results(
-                get_search().search(
-                    keyword,
-                    limit=limit,
-                    offset=offset,
-                    collection=collection,
-                    account_book=account_book,
-                    year_min=year_min,
-                    year_max=year_max,
-                    match_all=match_all,
-                    fuzzy=fuzzy,
-                )
-            ),
+            run,
+            keyword=keyword,
+            collection=collection,
+            account_book=account_book,
+            year_min=year_min,
+            year_max=year_max,
+            research_context=research_context,
+            **paging(offset, limit, match_all, fuzzy),
         )
 
     @mcp.tool(
@@ -147,4 +151,9 @@ def register_voudintilit_tools(mcp: FastMCP, get_search) -> None:
     def voudintilit_get_page(
         page_id: Annotated[str, Field(description="The page id from a voudintilit_search hit, '<volume>_<page>', e.g. '1578628789_0016'.")],
     ) -> str:
-        return answer("voudintilit_get_page", lambda: format_page(get_search().get_page(page_id), page_id))
+
+        def run() -> Answer:
+            page = get_search().get_page(page_id)
+            return format_page(page, page_id), found(page)
+
+        return answer("voudintilit_get_page", run, page_id=page_id)
