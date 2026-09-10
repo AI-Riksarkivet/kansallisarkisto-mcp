@@ -95,10 +95,20 @@
 
     <section class="card">
       <h2>Connect</h2>
-      <p class="muted">No hosted endpoint yet &mdash; run it locally over stdio, or in Docker over streamable HTTP.</p>
+      <p class="muted">Hosted on Hugging Face over streamable HTTP &mdash; no key, no sign-up:</p>
+      <p><span class="highlight">https://riksarkivet-kansallisarkisto-mcp.hf.space/mcp</span></p>
 
-      <h3>Claude Code (stdio, from a clone)</h3>
+      <h3>Claude Code</h3>
+      <pre><code>claude mcp add --transport http kansallisarkisto \
+  https://riksarkivet-kansallisarkisto-mcp.hf.space/mcp</code></pre>
+
+      <h3>claude.ai</h3>
+      <p class="muted">Settings &rarr; Connectors &rarr; Add custom connector, with the URL above.</p>
+      <p class="muted" style="font-size: 12px;">The Space sleeps after 48 hours without traffic. The first request wakes it, so a client that times out once will usually connect on the second try.</p>
+
+      <h3>Run it yourself (stdio, from a clone)</h3>
       <pre><code>make install
+make harvest            # df only: 6,876 charters, ~3 s
 make ingest-df          # builds data/df from .data/df/df.jsonl.gz
 claude mcp add kansallisarkisto -- uv run kansallisarkisto-mcp</code></pre>
 
