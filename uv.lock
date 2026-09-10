@@ -1296,7 +1296,7 @@ wheels = [
 
 [[package]]
 name = "ra-mcp-kansallisarkisto-lib"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "packages/kansallisarkisto-lib" }
 dependencies = [
     { name = "lancedb" },
@@ -1315,7 +1315,7 @@ requires-dist = [
 
 [[package]]
 name = "ra-mcp-kansallisarkisto-mcp"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "packages/kansallisarkisto-mcp" }
 dependencies = [
     { name = "fastmcp" },
