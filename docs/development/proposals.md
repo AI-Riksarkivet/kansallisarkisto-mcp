@@ -150,7 +150,7 @@ Full text of every proposal and verdict: [Resilience and failure modes](proposal
 
 ## Scale engineering for 7.8M pages (key: scale)
 
-Full text of every proposal and verdict: [Scale engineering for 7.8M pages](proposals/scale-engineering-for-7-8m-pages-key-scale.md).
+Full text of every proposal and verdict: [Scale engineering for 7.8M pages](proposals/scale.md).
 
 | id | proposal | effort | impact | verdict | the gap |
 |---|---|:-:|:-:|---|---|
@@ -194,7 +194,7 @@ Full text of every proposal and verdict: [philology](proposals/philology.md).
 
 ## repro — Reproducibility and data provenance
 
-Full text of every proposal and verdict: [repro — Reproducibility and data provenance](proposals/repro-reproducibility-and-data-provenance.md).
+Full text of every proposal and verdict: [repro — Reproducibility and data provenance](proposals/repro.md).
 
 | id | proposal | effort | impact | verdict | the gap |
 |---|---|:-:|:-:|---|---|
