@@ -28,8 +28,8 @@ account entries concerning Finland, 859–1530; **`voudintilit`**, 98,945 pages 
 crown's bailiff accounts for Häme and Satakunta, 1539–1635; and **`tuomiokirjat`**, 7.8
 million pages of Finnish lower-court records from 223 archives, 1610–1931. The pages of the
 two paged corpora are cited by their archival reference and linked to their image in Astia,
-Kansallisarkisto's digital archive — every voudintilit page, and all but a fraction of a
-percent of the court records.
+Kansallisarkisto's digital archive — every voudintilit page, and 99% of the court records
+(240 volumes carry no signum in Astia; 0.05% of pages have no image link).
 
 The range is wide but the weight is late: 83% of `df` falls in 1400–1530 and barely 240
 charters predate 1300, so a thin result for an early century is the archive rather than the

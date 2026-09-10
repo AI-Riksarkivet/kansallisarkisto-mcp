@@ -14,7 +14,8 @@ pages of the Swedish crown's bailiff accounts for Häme and Satakunta, 1539–16
 **`tuomiokirjat`**, 7.8 million pages of Finnish lower-court records from 223 archives,
 1610–1931. The pages of the two paged corpora are cited by their archival reference and
 linked to their image in Astia, Kansallisarkisto's digital archive — every voudintilit page,
-and all but a fraction of a percent of the court records.
+and 99% of the court records (240 volumes carry no signum in Astia; 0.05% of pages have no
+image link).
 
 ## The text is not in Finnish
 
