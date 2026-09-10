@@ -12,13 +12,15 @@ feasibility against the installed LanceDB, FastMCP and PyArrow. A proposal survi
 least two of the three did not refute it. The skeptics' corrections and sharpened versions
 are folded into the synthesised document; this page is the index.
 
-**Status:** 120 proposals, 63 survived, 2 refuted, 55 still under verification.
+**Status:** 120 proposals, 89 survived, 1 refuted, 30 still under verification.
 This page is regenerated as verification completes.
 
 Effort is S/M/L/XL as the proposing lens estimated it; impact is the lens's own 1–5 rating,
 before judging. Neither has been normalised across lenses yet.
 
 ## Developer experience and onboarding (devx)
+
+Full text of every proposal and verdict: [Developer experience and onboarding](proposals/devx.md).
 
 | id | proposal | effort | impact | verdict | the gap |
 |---|---|:-:|:-:|---|---|
@@ -33,6 +35,8 @@ before judging. Neither has been normalised across lenses yet.
 
 ## Documentation and knowledge design (docs)
 
+Full text of every proposal and verdict: [Documentation and knowledge design](proposals/docs.md).
+
 | id | proposal | effort | impact | verdict | the gap |
 |---|---|:-:|:-:|---|---|
 | `docs-1` | corpus-facts.json: one measured source for every number, rendered into docs, README and tool descriptions, with a numeral linter that fails … | L | 5 | survived 3/3, with corrections | Two audits corrected numbers by reading; the third drift instance (141,032 vs 141,118) and the fourth (277 in sample output) were found here by arithmetic, not reading. Nothing in the repository knows what the numbers … |
@@ -44,6 +48,8 @@ before judging. Neither has been normalised across lenses yet.
 | `docs-7` | Serve the knowledge to the model as MCP resources and a prompt — facts, glossary, snapshot provenance, citation — instead of only in the … | M | 3 | survived 2/3, with corrections | A model that wants the full label vocabulary, the snapshot date to cite, or the glossary has nowhere to read it, and the only lever the maintainers have is to lengthen the description — which is what the last three docs … |
 
 ## Ecosystem and federation across the Nordic archive MCP family (ecosystem)
+
+Full text of every proposal and verdict: [Ecosystem and federation across the Nordic archive MCP family](proposals/ecosystem.md).
 
 | id | proposal | effort | impact | verdict | the gap |
 |---|---|:-:|:-:|---|---|
@@ -58,6 +64,8 @@ before judging. Neither has been normalised across lenses yet.
 
 ## Information retrieval science and search quality (ir)
 
+Full text of every proposal and verdict: [Information retrieval science and search quality](proposals/ir.md).
+
 | id | proposal | effort | impact | verdict | the gap |
 |---|---|:-:|:-:|---|---|
 | `ir-1` | A relevance test collection and regression gate built from simulated known-item topics, variant clusters and facet topics — no historians … | XL | 5 | survived 3/3, with corrections | Every retrieval decision in this project — stop words kept, fuzzy off, stemming on, concatenated field — was measured once by hand and cannot be re-measured automatically. Proposals ir-2, ir-3, ir-6 and ir-7 all change … |
@@ -69,6 +77,8 @@ before judging. Neither has been normalised across lenses yet.
 | `ir-7` | Per-language analysis for a corpus that is 42% not Swedish: a Latin-stemmed column and a German-stemmed column routed by the `language` … | M | 3 | survived 3/3, with corrections | 'Best single choice' is the wrong frame when the language of every row is known: analysis can be routed. tantivy ships a German stemmer (language='German') but no Latin one; Latin needs an ingest-time stemmer — … |
 
 ## LLM tool design and MCP ergonomics (llmtool)
+
+Full text of every proposal and verdict: [LLM tool design and MCP ergonomics](proposals/llmtool.md).
 
 | id | proposal | effort | impact | verdict | the gap |
 |---|---|:-:|:-:|---|---|
@@ -83,17 +93,21 @@ before judging. Neither has been normalised across lenses yet.
 
 ## Observability and operations (ops)
 
+Full text of every proposal and verdict: [Observability and operations](proposals/ops.md).
+
 | id | proposal | effort | impact | verdict | the gap |
 |---|---|:-:|:-:|---|---|
-| `ops-1` | Make the RED histograms able to answer a latency SLI, and count the error strings the spans hide | S | 4 | pending (0/3 verdicts in) | The project's own claim (dataset.py:76-78: 'an error-rate panel and a latency percentile both work') is false for latency under the SDK it ships with, and half-true for errors: the class of failure this server was … |
-| `ops-2` | SLOs, dashboards and burn-rate alerts shipped as code, with a test that every metric they name exists | M | 4 | pending (0/3 verdicts in) | An operator can see spans and four series but has no statement of what 'good' is for this service, no page to look at, nothing that pages, and no way to know a metric rename in dataset.py broke a dashboard until someone … |
-| `ops-3` | 'Degraded' as a first-class state: a query deadline, an in-flight gate, and a readiness body that carries table identity and evicts a dead … | L | 5 | pending (0/3 verdicts in) | The server has exactly two states, up and missing-table. Slow object storage, a saturated worker pool, a table swapped underneath it, and a remount are all reported as either 'ready' or an internal error, to the … |
-| `ops-4` | Trace ids on every stderr line, one canonical log line per tools/call, and an instance id that gives stdio sessions an identity | S | 3 | pending (0/3 verdicts in) | A log line and a span about the same failure cannot be joined by an operator reading container logs; there is no per-call record that says tool, outcome, duration, hit count and page in one greppable line; and stdio — … |
-| `ops-5` | A Helm chart derived from settings.py, with probe timings, a PDB, and memory limits computed from the measured per-search cost | XL | 4 | pending (0/3 verdicts in) | The stated bar is 'an operator runs it without reading source'. Today the operator has to derive probe timings from prose, guess memory, and rediscover the uid trap on a PVC. |
-| `ops-6` | Runbooks with an automated `doctor`: turn lance's one error message into six distinguishable verdicts | M | 4 | pending (0/3 verdicts in) | There are no runbooks, and the one automated diagnosis the server has is wrong for the second-most-likely failure. Nothing measures how many versions a re-ingest leaves behind on a 19 GB table, and nothing tells an … |
-| `ops-7` | A capacity model and a load-test gate in Dagger, so a lancedb bump that Dependabot auto-merges cannot silently double the cost of a search | M | 3 | pending (0/3 verdicts in) | The project 'scales to 7.8M pages without changing shape' is asserted; the per-search cost that decides pod memory and concurrency has never been written down, and a regression in the engine would reach main unnoticed. |
+| `ops-1` | Make the RED histograms able to answer a latency SLI, and count the error strings the spans hide | S | 4 | survived 3/3, with corrections | The project's own claim (dataset.py:76-78: 'an error-rate panel and a latency percentile both work') is false for latency under the SDK it ships with, and half-true for errors: the class of failure this server was … |
+| `ops-2` | SLOs, dashboards and burn-rate alerts shipped as code, with a test that every metric they name exists | M | 4 | survived 2/3, with corrections | An operator can see spans and four series but has no statement of what 'good' is for this service, no page to look at, nothing that pages, and no way to know a metric rename in dataset.py broke a dashboard until someone … |
+| `ops-3` | 'Degraded' as a first-class state: a query deadline, an in-flight gate, and a readiness body that carries table identity and evicts a dead … | L | 5 | survived 3/3, with corrections | The server has exactly two states, up and missing-table. Slow object storage, a saturated worker pool, a table swapped underneath it, and a remount are all reported as either 'ready' or an internal error, to the … |
+| `ops-4` | Trace ids on every stderr line, one canonical log line per tools/call, and an instance id that gives stdio sessions an identity | S | 3 | survived 3/3, with corrections | A log line and a span about the same failure cannot be joined by an operator reading container logs; there is no per-call record that says tool, outcome, duration, hit count and page in one greppable line; and stdio — … |
+| `ops-5` | A Helm chart derived from settings.py, with probe timings, a PDB, and memory limits computed from the measured per-search cost | XL | 4 | survived 2/3, with corrections | The stated bar is 'an operator runs it without reading source'. Today the operator has to derive probe timings from prose, guess memory, and rediscover the uid trap on a PVC. |
+| `ops-6` | Runbooks with an automated `doctor`: turn lance's one error message into six distinguishable verdicts | M | 4 | survived 3/3, with corrections | There are no runbooks, and the one automated diagnosis the server has is wrong for the second-most-likely failure. Nothing measures how many versions a re-ingest leaves behind on a 19 GB table, and nothing tells an … |
+| `ops-7` | A capacity model and a load-test gate in Dagger, so a lancedb bump that Dependabot auto-merges cannot silently double the cost of a search | M | 3 | survived 3/3, with corrections | The project 'scales to 7.8M pages without changing shape' is asserted; the per-search cost that decides pod memory and concurrency has never been written down, and a regression in the engine would reach main unnoticed. |
 
 ## Open-source craft and community (oss)
+
+Full text of every proposal and verdict: [Open-source craft and community](proposals/oss.md).
 
 | id | proposal | effort | impact | verdict | the gap |
 |---|---|:-:|:-:|---|---|
@@ -107,6 +121,8 @@ before judging. Neither has been normalised across lenses yet.
 
 ## Performance engineering (perf)
 
+Full text of every proposal and verdict: [Performance engineering](proposals/perf.md).
+
 | id | proposal | effort | impact | verdict | the gap |
 |---|---|:-:|:-:|---|---|
 | `perf-1` | One ranking, twenty-five rows: rank on _rowid+_score, page with take_row_ids | M | 5 | pending (0/3 verdicts in) | A capped query costs ~100 ms and 5 MB of Arrow plus ~50 MB of transient Python objects to learn a total of '10000+' and return 25 rows; 2/3 of the time is GIL-held dict building that also serialises every concurrent … |
@@ -118,6 +134,8 @@ before judging. Neither has been normalised across lenses yet.
 | `perf-7` | A corpus-shaped synthetic generator so the 7.8M-row shape is measured nightly rather than asserted | XL | 4 | pending (0/3 verdicts in) | The project's central scaling claim rests on extrapolation from a corpus 1,000x smaller, with the cost curves that matter most (fuzzy, LIKE, common Swedish function words that the stop-word decision keeps searchable) … |
 
 ## Resilience and failure modes (resilience)
+
+Full text of every proposal and verdict: [Resilience and failure modes](proposals/resilience.md).
 
 | id | proposal | effort | impact | verdict | the gap |
 |---|---|:-:|:-:|---|---|
@@ -132,6 +150,8 @@ before judging. Neither has been normalised across lenses yet.
 
 ## Scale engineering for 7.8M pages (key: scale)
 
+Full text of every proposal and verdict: [Scale engineering for 7.8M pages](proposals/scale-engineering-for-7-8m-pages-key-scale.md).
+
 | id | proposal | effort | impact | verdict | the gap |
 |---|---|:-:|:-:|---|---|
 | `scale-1` | Rank by row id, take only the page: same ranked set, 1/15th of the cost | S | 5 | survived 3/3, with corrections | Every search pays for 9,975 rows it throws away. At 7.8M court pages (~2.5 KB each) a common term means ~25 MB of transcript through Arrow->dict per call, ~120 MB RSS per in-flight query, and on object storage 60+ range … |
@@ -144,18 +164,22 @@ before judging. Neither has been normalised across lenses yet.
 
 ## Software architecture and the multi-corpus abstraction (arch)
 
+Full text of every proposal and verdict: [Software architecture and the multi-corpus abstraction](proposals/arch.md).
+
 | id | proposal | effort | impact | verdict | the gap |
 |---|---|:-:|:-:|---|---|
-| `arch-1` | A corpus is a declarative CorpusSpec; ingest, search, indexes, tool signatures and the invariant suite are derived from it | XL | 5 | survived 2/2, with corrections | The next corpus is not 'a week's work'; it is a re-implementation of df with different nouns, and every one of the four copies of the filter list can drift independently (the index plan and the predicate builder already … |
-| `arch-2` | Corpus facts are computed at ingest into a sibling `<table>__facts` table, interpolated into tool descriptions at boot, and every number in … | L | 5 | survived 2/2, with corrections | The project's best property (measured numbers beside the code) is also its rot vector: the numbers cannot be checked, drift has already happened (27/28, 16/18 in the first audit), and the MCP layer cannot say what is … |
-| `arch-3` | One error taxonomy in the lib (CorpusInput, CorpusUnavailable, everything else) and one answer() envelope; the missing-table concept moves … | M | 4 | survived 2/2, with corrections | Every new corpus and every new caller-fixable condition must be threaded through three files and two channels, and the lib's public contract for a missing table is a leaked lancedb message. |
-| `arch-4` | The result envelope carries corpus identity and a per-record Citation, and tools return structured content beside the text | S | 4 | survived 2/2, with corrections | A historian's trust rests on citations, and the citation is the one thing the server does not return in machine-checkable form; a client with structuredContent support gets nothing to verify against. |
-| `arch-5` | Package layout for three corpora and two sibling archives: an archive-agnostic `archive-mcp-kit`, a `kansallisarkisto-corpora` package of … | XL | 5 | refuted 1/2 (Project maintainer) | Sharing happens by copy-and-annotate. A fix in one archive reaches the others only if someone remembers the docstring, and the SBOM/pip-audit/Trivy machinery attests three divergent copies of the same 700 lines. |
-| `arch-6` | Settings own URI resolution once, and one Catalog answers 'present / readable / rows' for boot log, readiness and the facades | S | 3 | survived 2/2, with corrections | The seam between settings and resolution is a property that re-runs a directory walk, and the 'is the corpus there' question has three implementations with three answers. |
-| `arch-7` | Keep sync tools in the threadpool, but bound per-corpus search concurrency below the 40-wide anyio limiter using facts-derived row cost | M | 4 | pending (0/3 verdicts in) | The right per-call design (sync in a worker) has no per-process budget, so the first hosted deployment of tuomiokirjat turns 40 concurrent saturated searches into a multi-GB spike and an 'internal MemoryError' text … |
-| `arch-8` | The invariant and retrieval-quality suites run for every corpus from its spec and fixture, so the second corpus is tested on day one | S | 4 | pending (0/3 verdicts in) | The project's stated bar is 'retrieval quality proven rather than asserted'; that proof is currently a df-only artefact and would not transfer. |
+| `arch-1` | A corpus is a declarative CorpusSpec; ingest, search, indexes, tool signatures and the invariant suite are derived from it | XL | 5 | survived 3/3, with corrections | The next corpus is not 'a week's work'; it is a re-implementation of df with different nouns, and every one of the four copies of the filter list can drift independently (the index plan and the predicate builder already … |
+| `arch-2` | Corpus facts are computed at ingest into a sibling `<table>__facts` table, interpolated into tool descriptions at boot, and every number in … | L | 5 | survived 3/3, with corrections | The project's best property (measured numbers beside the code) is also its rot vector: the numbers cannot be checked, drift has already happened (27/28, 16/18 in the first audit), and the MCP layer cannot say what is … |
+| `arch-3` | One error taxonomy in the lib (CorpusInput, CorpusUnavailable, everything else) and one answer() envelope; the missing-table concept moves … | M | 4 | survived 3/3, with corrections | Every new corpus and every new caller-fixable condition must be threaded through three files and two channels, and the lib's public contract for a missing table is a leaked lancedb message. |
+| `arch-4` | The result envelope carries corpus identity and a per-record Citation, and tools return structured content beside the text | S | 4 | survived 3/3, with corrections | A historian's trust rests on citations, and the citation is the one thing the server does not return in machine-checkable form; a client with structuredContent support gets nothing to verify against. |
+| `arch-5` | Package layout for three corpora and two sibling archives: an archive-agnostic `archive-mcp-kit`, a `kansallisarkisto-corpora` package of … | XL | 5 | survived 2/3, with corrections | Sharing happens by copy-and-annotate. A fix in one archive reaches the others only if someone remembers the docstring, and the SBOM/pip-audit/Trivy machinery attests three divergent copies of the same 700 lines. |
+| `arch-6` | Settings own URI resolution once, and one Catalog answers 'present / readable / rows' for boot log, readiness and the facades | S | 3 | survived 3/3, with corrections | The seam between settings and resolution is a property that re-runs a directory walk, and the 'is the corpus there' question has three implementations with three answers. |
+| `arch-7` | Keep sync tools in the threadpool, but bound per-corpus search concurrency below the 40-wide anyio limiter using facts-derived row cost | M | 4 | survived 2/3, with corrections | The right per-call design (sync in a worker) has no per-process budget, so the first hosted deployment of tuomiokirjat turns 40 concurrent saturated searches into a multi-GB spike and an 'internal MemoryError' text … |
+| `arch-8` | The invariant and retrieval-quality suites run for every corpus from its spec and fixture, so the second corpus is tested on day one | S | 4 | survived 3/3, with corrections | The project's stated bar is 'retrieval quality proven rather than asserted'; that proof is currently a df-only artefact and would not transfer. |
 
 ## philology
+
+Full text of every proposal and verdict: [philology](proposals/philology.md).
 
 | id | proposal | effort | impact | verdict | the gap |
 |---|---|:-:|:-:|---|---|
@@ -170,6 +194,8 @@ before judging. Neither has been normalised across lenses yet.
 
 ## repro — Reproducibility and data provenance
 
+Full text of every proposal and verdict: [repro — Reproducibility and data provenance](proposals/repro-reproducibility-and-data-provenance.md).
+
 | id | proposal | effort | impact | verdict | the gap |
 |---|---|:-:|:-:|---|---|
 | `repro-1` | Dataset identity: a snapshot manifest born at harvest, carried in the LanceDB schema metadata, surfaced in /ready, in every tool reply and … | L | 5 | survived 3/3, with corrections | A running server cannot say which harvest it serves. A historian citing 'DF 2457 via kansallisarkisto-mcp' cannot say when the snapshot was taken or whether it covered 100% or 98.25%; an operator with two /data … |
@@ -181,6 +207,8 @@ before judging. Neither has been normalised across lenses yet.
 | `repro-7` | A drift sentinel: harvest df weekly in CI, compare its digest with the released descriptor, and turn 'the index moves' into a time series … | M | 3 | survived 3/3, with corrections | The most consequential external dependency of this server — the archive's own edits — is monitored by nobody. A model quoting a transcript that Kansallisarkisto corrected last month is the failure the tool descriptions … |
 
 ## scholar
+
+Full text of every proposal and verdict: [scholar](proposals/scholar.md).
 
 | id | proposal | effort | impact | verdict | the gap |
 |---|---|:-:|:-:|---|---|
@@ -194,35 +222,35 @@ before judging. Neither has been normalised across lenses yet.
 
 ## security
 
+Full text of every proposal and verdict: [security](proposals/security.md).
+
 | id | proposal | effort | impact | verdict | the gap |
 |---|---|:-:|:-:|---|---|
-| `security-1` | A threat model that is a test: three deployment profiles, a control matrix, and a test that keeps the matrix honest | M | 4 | pending (0/3 verdicts in) | Controls cannot be classified as sound, missing or performative because there is no statement of what they defend, against whom, in which deployment. Concretely, the same code is (P1) a stdio child of a desktop MCP host … |
-| `security-2` | A hosted-endpoint profile in settings: token/JWT auth, host-origin protection, trusted proxies, stateless sessions and a per-client rate … | L | 5 | pending (0/3 verdicts in) | For P3 (hosted) the server has no way to say who may call it, which Host it answers to, which proxies it believes, or how much one client may spend. All of it is one env-gated block away, and the project's philosophy … |
-| `security-3` | Make the worst query cheap: two-phase search that counts by row id and fetches only the page, plus keyword and term bounds | M | 4 | pending (0/3 verdicts in) | An unauthenticated caller — or an honest model paging with match_all=false on a stop-word-like term — makes the server materialise ~23 MB per call (10k x 2.3 KB) per worker thread, and on tuomiokirjat (7.8M pages, … |
-| `security-4` | Close the transcript hole in the anti-forgery measure and strip format characters that survive _oneline | S | 4 | pending (0/3 verdicts in) | The field that IS the OCR — the transcript, the largest and least controlled input — is the one field the structural protection does not cover, in the view a model reads when it wants the full text. And the protection … |
-| `security-5` | Earn the badges: least-privilege release jobs, a verify job that runs cosign and slsa-verifier as a consumer would, reproducible rebuild … | XL | 5 | pending (0/3 verdicts in) | Badges: Tests/Security/Docs/Secret-Leaks/Scorecard are earned (they report real runs). SLSA L3, Sigstore and SBOM are aspirational by the README's own admission and, more importantly, will remain *unverified* after the … |
-| `security-6` | Dependency cooldown and a hash-locked docs build: sit out the malicious-release window and stop floating packages from holding a Pages … | S | 3 | pending (0/3 verdicts in) | Both auto-merge and the docs build accept the newest artefact on the day. Most malicious PyPI/npm releases are detected and yanked within days; a short cooldown removes most of that exposure at zero engineering cost, … |
-| `security-7` | Property-based fuzzing of the predicate builders, the query parser boundary and the record ingest — the fuzzing Scorecard looks for, with … | M | 3 | pending (0/3 verdicts in) | The injection and robustness properties are among the project's strongest claims and are pinned by a dozen hand-picked strings. They are properties over *all* strings, and the fixture plus a Python oracle makes them … |
-| `security-8` | A signed data manifest: make the mounted table — the half of the deployment the image does not contain — provenanced, citable and … | M | 4 | pending (0/3 verdicts in) | The corpus is the attack surface and the trust anchor at once, and it is the one artefact with no provenance: an operator cannot tell which harvest a server is serving, a historian cannot cite the snapshot a quotation … |
+| `security-1` | A threat model that is a test: three deployment profiles, a control matrix, and a test that keeps the matrix honest | M | 4 | survived 3/3, with corrections | Controls cannot be classified as sound, missing or performative because there is no statement of what they defend, against whom, in which deployment. Concretely, the same code is (P1) a stdio child of a desktop MCP host … |
+| `security-2` | A hosted-endpoint profile in settings: token/JWT auth, host-origin protection, trusted proxies, stateless sessions and a per-client rate … | L | 5 | survived 3/3, with corrections | For P3 (hosted) the server has no way to say who may call it, which Host it answers to, which proxies it believes, or how much one client may spend. All of it is one env-gated block away, and the project's philosophy … |
+| `security-3` | Make the worst query cheap: two-phase search that counts by row id and fetches only the page, plus keyword and term bounds | M | 4 | survived 3/3, with corrections | An unauthenticated caller — or an honest model paging with match_all=false on a stop-word-like term — makes the server materialise ~23 MB per call (10k x 2.3 KB) per worker thread, and on tuomiokirjat (7.8M pages, … |
+| `security-4` | Close the transcript hole in the anti-forgery measure and strip format characters that survive _oneline | S | 4 | survived 3/3, with corrections | The field that IS the OCR — the transcript, the largest and least controlled input — is the one field the structural protection does not cover, in the view a model reads when it wants the full text. And the protection … |
+| `security-5` | Earn the badges: least-privilege release jobs, a verify job that runs cosign and slsa-verifier as a consumer would, reproducible rebuild … | XL | 5 | survived 3/3, with corrections | Badges: Tests/Security/Docs/Secret-Leaks/Scorecard are earned (they report real runs). SLSA L3, Sigstore and SBOM are aspirational by the README's own admission and, more importantly, will remain *unverified* after the … |
+| `security-6` | Dependency cooldown and a hash-locked docs build: sit out the malicious-release window and stop floating packages from holding a Pages … | S | 3 | survived 3/3, with corrections | Both auto-merge and the docs build accept the newest artefact on the day. Most malicious PyPI/npm releases are detected and yanked within days; a short cooldown removes most of that exposure at zero engineering cost, … |
+| `security-7` | Property-based fuzzing of the predicate builders, the query parser boundary and the record ingest — the fuzzing Scorecard looks for, with … | M | 3 | survived 3/3, with corrections | The injection and robustness properties are among the project's strongest claims and are pinned by a dozen hand-picked strings. They are properties over *all* strings, and the fixture plus a Python oracle makes them … |
+| `security-8` | A signed data manifest: make the mounted table — the half of the deployment the image does not contain — provenanced, citable and … | M | 4 | survived 3/3, with corrections | The corpus is the attack surface and the trust anchor at once, and it is the one artefact with no provenance: an operator cannot tell which harvest a server is serving, a historian cannot cite the snapshot a quotation … |
 
 ## testing
 
+Full text of every proposal and verdict: [testing](proposals/testing.md).
+
 | id | proposal | effort | impact | verdict | the gap |
 |---|---|:-:|:-:|---|---|
-| `testing-1` | Fault-injection suite for the mounted-table deployment: the silent-empty-corpus and split-brain modes the probes cannot see | M | 5 | pending (0/3 verdicts in) | Three real deployment states — FTS index never built, rows appended after indexing, index files missing/unreadable — are invisible to /ready, to the boot probe, and to every test; two of them produce a server that … |
-| `testing-2` | Nightly corpus conformance without shipping data: harvest df live (3 s), regenerate a measurements registry, and make every quoted number a … | L | 5 | pending (0/3 verdicts in) | 238 measured numbers are the product this server hands to a language model, and none of them is recomputed by anything; the 7 tests that would check the corpus never execute; drift between harvests (voudintilit moved … |
-| `testing-3` | Prove the declared dependency floor and the table-format contract between the ingest machine and the image | S | 4 | pending (0/3 verdicts in) | The declared floor is false by at least ten minor releases, and nothing tests that a table built with lancedb N is served correctly by lancedb N+k — the exact situation the mount-based deployment creates. Dependabot … |
-| `testing-4` | A brute-force reference search as an oracle, and hypothesis properties over the predicate builders and formatter | M | 4 | pending (0/3 verdicts in) | The properties the project reasons about — filters are literal, the year filter is overlap, AND⊆OR, phrase⊆AND, fuzzy(base)⊇exact, pages tile — are asserted on two or three chosen inputs; the injection resistance the … |
-| `testing-5` | Golden contract of the model-facing surface: tools/list schema, formatted responses, executable description examples, and a real stdio … | M | 4 | pending (0/3 verdicts in) | The text a model reads — schema, descriptions, instructions, formatted results — is the product, and a FastMCP bump or a wording edit can change it without any test noticing; the default transport is never exercised; … |
-| `testing-6` | Mutation testing as a scheduled, scored gate — and the sub-2-second inner loop that makes it affordable | S | 3 | pending (0/3 verdicts in) | Mutation testing found real gaps once and left no instrument behind; the formatter — the only code whose output a model reads verbatim — has a 70% kill rate on operator mutants; and the whole suite re-indexes the … |
-| `testing-7` | Contract tests for harvest.py against a fake and a recorded Sisältöhaku | M | 3 | pending (0/3 verdicts in) | The pipeline that decides what 98.25% means, and the encoding details that fail silently, are verified only by a memory of a probing session; a refactor that switched the range to the string form would produce a … |
-| `testing-8` | Scale conformance: a synthetic tuomiokirjat-shaped corpus and a budget test for the 10k materialisation pattern | L | 4 | pending (0/3 verdicts in) | The claim that the shape survives 7.8M rows rests on a pattern measured at 6,876 rows; at 100k rows a common-term search already spends 0.4 s and 50 MB counting rows it discards, and four concurrent model calls multiply … |
+| `testing-1` | Fault-injection suite for the mounted-table deployment: the silent-empty-corpus and split-brain modes the probes cannot see | M | 5 | survived 3/3, with corrections | Three real deployment states — FTS index never built, rows appended after indexing, index files missing/unreadable — are invisible to /ready, to the boot probe, and to every test; two of them produce a server that … |
+| `testing-2` | Nightly corpus conformance without shipping data: harvest df live (3 s), regenerate a measurements registry, and make every quoted number a … | L | 5 | survived 3/3, with corrections | 238 measured numbers are the product this server hands to a language model, and none of them is recomputed by anything; the 7 tests that would check the corpus never execute; drift between harvests (voudintilit moved … |
+| `testing-3` | Prove the declared dependency floor and the table-format contract between the ingest machine and the image | S | 4 | survived 3/3, with corrections | The declared floor is false by at least ten minor releases, and nothing tests that a table built with lancedb N is served correctly by lancedb N+k — the exact situation the mount-based deployment creates. Dependabot … |
+| `testing-4` | A brute-force reference search as an oracle, and hypothesis properties over the predicate builders and formatter | M | 4 | survived 3/3, with corrections | The properties the project reasons about — filters are literal, the year filter is overlap, AND⊆OR, phrase⊆AND, fuzzy(base)⊇exact, pages tile — are asserted on two or three chosen inputs; the injection resistance the … |
+| `testing-5` | Golden contract of the model-facing surface: tools/list schema, formatted responses, executable description examples, and a real stdio … | M | 4 | survived 3/3, with corrections | The text a model reads — schema, descriptions, instructions, formatted results — is the product, and a FastMCP bump or a wording edit can change it without any test noticing; the default transport is never exercised; … |
+| `testing-6` | Mutation testing as a scheduled, scored gate — and the sub-2-second inner loop that makes it affordable | S | 3 | survived 3/3, with corrections | Mutation testing found real gaps once and left no instrument behind; the formatter — the only code whose output a model reads verbatim — has a 70% kill rate on operator mutants; and the whole suite re-indexes the … |
+| `testing-7` | Contract tests for harvest.py against a fake and a recorded Sisältöhaku | M | 3 | survived 3/3, with corrections | The pipeline that decides what 98.25% means, and the encoding details that fail silently, are verified only by a memory of a probing session; a refactor that switched the range to the string form would produce a … |
+| `testing-8` | Scale conformance: a synthetic tuomiokirjat-shaped corpus and a budget test for the 10k materialisation pattern | L | 4 | survived 3/3, with corrections | The claim that the shape survives 7.8M rows rests on a pattern measured at 6,876 rows; at 100k rows a common-term search already spends 0.4 s and 50 MB counting rows it discards, and four concurrent model calls multiply … |
 
 ## Refuted, and why
-
-**`arch-5` — Package layout for three corpora and two sibling archives: an archive-agnostic `archive-mcp-kit`, a `kansallisarkisto-corpora` package of …**
-
-- *Project maintainer:* The premise of copy-and-annotate sharing is documented (dataset.py:8, lib/telemetry.py:13-14, mcp/telemetry.py:18, routes.py:17; audit finding 13's 'ra-mcp likely has it too'). But a maintainer says 'not now', and not primarily for the reason the proposal gives. (1) The only step that can be done in this repo — 'split the lib into kit-shaped modules with df in corpora/df.py' — is arch-1's PR 1 restated; every other measurable outcome (ra-mcp deleting modules, three SBOMs listing the kit, the OTel test existing once) depends on ra-mcp's maintainers and on ape-mcp, which this repo does not control. (2) It does not weigh its own supply-chain cost: a kit on PyPI is a second signed, …
 
 **`devx-3` — CI wall time from 2 m 09 s to under 75 s: a uv cache volume in the Dagger engine, four parallel jobs, pip-audit moved to the …**
 
