@@ -134,5 +134,17 @@ def _is_populated(path: Path) -> bool:
 
 
 def _copy_tree(source: Path, target: Path) -> None:
-    """Copy the database directory. Split out so a test can make it fail part-way."""
-    shutil.copytree(source, target, dirs_exist_ok=True)
+    """Copy the database directory: fresh directories, file contents only.
+
+    Not ``shutil.copytree``, which stamps each source directory's mode onto its copy.
+    The Space mounts its bucket read-only, so that made ``/data-local`` 0555 the moment
+    the copy finished — the completion marker could not be written, the cleanup could
+    not remove the copy, and the server fell back to serving the mount. Nothing about
+    the mount's metadata is worth carrying over; the copies simply belong to the
+    runtime user with its default modes. Split out so a test can make it fail part-way.
+    """
+    for dirpath, _dirnames, filenames in os.walk(source):
+        relative = Path(dirpath).relative_to(source)
+        (target / relative).mkdir(parents=True, exist_ok=True)
+        for name in filenames:
+            shutil.copyfile(Path(dirpath) / name, target / relative / name)

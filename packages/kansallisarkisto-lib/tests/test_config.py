@@ -7,6 +7,7 @@ an image whose KA_LANCEDB_URI was unset would look in /app/data and never at the
 mounted /data.
 """
 
+import os
 from pathlib import Path
 
 import pytest
@@ -128,6 +129,25 @@ def test_an_interrupted_copy_is_not_mistaken_for_a_staged_one(tmp_path):
     (target / "df.lance").mkdir(parents=True)
     assert config.stage_lancedb(str(source), target) == str(target)
     assert (target / "df.lance" / "data.lance").read_text() == "new"
+
+
+def test_staging_does_not_inherit_the_mounts_read_only_mode(tmp_path):
+    """The Space mounts its bucket read-only, and copytree stamps each source directory's
+    mode onto its copy — so /data-local came out 0555, the completion marker could not be
+    written, the cleanup could not remove the copy, and the server fell back to serving
+    the mount: the one thing staging exists to avoid. Directories are created fresh and
+    only file contents are copied, never metadata."""
+    source, target = _table_dir(tmp_path / "mount"), tmp_path / "local"
+    read_only = (source / "df.lance", source)
+    for path in read_only:
+        path.chmod(0o555)
+    try:
+        assert config.stage_lancedb(str(source), target) == str(target)
+        assert (target / ".staged").is_file()
+        assert os.access(target / "df.lance", os.W_OK)
+    finally:
+        for path in read_only:
+            path.chmod(0o755)
 
 
 def test_staging_that_cannot_even_look_falls_back(monkeypatch, tmp_path):
