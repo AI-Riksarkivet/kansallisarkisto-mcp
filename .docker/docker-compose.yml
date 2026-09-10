@@ -23,7 +23,7 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4317}"
       OTEL_EXPORTER_OTLP_PROTOCOL: "${OTEL_EXPORTER_OTLP_PROTOCOL:-grpc}"
       OTEL_SERVICE_NAME: "kansallisarkisto-mcp"
-    # The LanceDB tables built by `make ingest-df`. Read-only: the server never
+    # The LanceDB tables built by `make ingest-df` and `make ingest-voudintilit`. Read-only: the server never
     # writes, and indexes are baked in at ingest time. The server boots without
     # them and says so, so an un-ingested clone still starts.
     volumes:

@@ -1,4 +1,4 @@
-"""The non-MCP HTTP routes: the landing page at / and the health probe."""
+"""The non-MCP HTTP routes: the landing page at / and the health probes."""
 
 from __future__ import annotations
 
@@ -11,7 +11,12 @@ from fastmcp import Client
 
 from ra_mcp_kansallisarkisto_mcp.tools import kansallisarkisto_mcp
 
-DF_FIXTURE = Path(__file__).parents[2] / "kansallisarkisto-lib" / "tests" / "fixtures" / "df_sample.jsonl"
+FIXTURES = Path(__file__).parents[2] / "kansallisarkisto-lib" / "tests" / "fixtures"
+DF_FIXTURE = FIXTURES / "df_sample.jsonl"
+VOUDINTILIT_FIXTURE = FIXTURES / "voudintilit_sample.jsonl"
+VOUDINTILIT_ASTIA_FIXTURE = FIXTURES / "voudintilit_astia_sample.jsonl"
+
+READY = {"status": "ready", "table": "df, voudintilit"}
 
 
 @pytest.fixture(scope="module")
@@ -28,6 +33,17 @@ def client():
             return asyncio.run(go())
 
     return Sync()
+
+
+@pytest.fixture
+def tools(monkeypatch):
+    """The tools module with both facades unbuilt, so a readiness test measures the
+    URI it sets rather than a facade some earlier test left behind."""
+    from ra_mcp_kansallisarkisto_mcp import tools
+
+    monkeypatch.setattr(tools, "_search", None)
+    monkeypatch.setattr(tools, "_voudintilit_search", None)
+    return tools
 
 
 def test_root_serves_the_landing_page(client):
@@ -55,17 +71,14 @@ def test_health_route(client):
     assert r.json() == {"status": "ok"}
 
 
-def test_ready_reports_not_ready_without_a_table(client, monkeypatch, tmp_path):
+def test_ready_reports_not_ready_without_a_table(client, monkeypatch, tmp_path, tools):
     """/health answers the process; /ready answers whether a search would work.
 
     Conflating them routes traffic to a server whose every tool call is an error
     message — the image ships without data on purpose, so the two states are
     genuinely different.
     """
-    from ra_mcp_kansallisarkisto_mcp import tools
-
     monkeypatch.setattr(tools.settings, "ka_lancedb_uri", str(tmp_path / "empty"))
-    monkeypatch.setattr(tools, "_search", None)
     response = client.get("/ready")
     assert response.status_code == 503
     assert response.json()["status"] == "not ready"
@@ -73,50 +86,71 @@ def test_ready_reports_not_ready_without_a_table(client, monkeypatch, tmp_path):
     assert client.get("/health").status_code == 200
 
 
-def test_ready_reports_ready_once_the_table_is_searchable(client, monkeypatch, df_search):
-    from ra_mcp_kansallisarkisto_mcp import tools
-
+def test_ready_reports_ready_once_every_table_is_searchable(client, monkeypatch, tools, df_search, voudintilit_search):
     monkeypatch.setattr(tools, "_search", df_search)
+    monkeypatch.setattr(tools, "_voudintilit_search", voudintilit_search)
     response = client.get("/ready")
     assert response.status_code == 200
-    assert response.json() == {"status": "ready", "table": "df"}
+    assert response.json() == READY
 
 
-def test_health_is_liveness_and_stays_ok_without_a_table(client, monkeypatch, tmp_path):
+def test_health_is_liveness_and_stays_ok_without_a_table(client, monkeypatch, tmp_path, tools):
     """Liveness must not depend on the data. The server boots without a table on
     purpose, so a probe that failed there would restart a healthy process."""
-    from ra_mcp_kansallisarkisto_mcp import tools
-
     monkeypatch.setattr(tools.settings, "ka_lancedb_uri", str(tmp_path / "empty"))
-    monkeypatch.setattr(tools, "_search", None)
     r = client.get("/health")
     assert r.status_code == 200
     assert r.json() == {"status": "ok"}
 
 
-def test_ready_is_503_when_the_table_is_missing(client, monkeypatch, tmp_path):
+def test_ready_is_503_when_the_table_is_missing(client, monkeypatch, tmp_path, tools):
     """The gap this route closes: /health alone reported 'ok' on a server whose
     every tool call answered with the missing-table error."""
-    from ra_mcp_kansallisarkisto_mcp import tools
-
     monkeypatch.setattr(tools.settings, "ka_lancedb_uri", str(tmp_path / "empty"))
-    monkeypatch.setattr(tools, "_search", None)
     r = client.get("/ready")
     assert r.status_code == 503
     assert r.json()["status"] == "not ready"
     assert "df table is not available" in r.json()["reason"]
 
 
-def test_ready_is_200_once_the_table_is_there(client, monkeypatch, tmp_path):
+def test_ready_is_503_while_one_corpus_is_missing(client, monkeypatch, tmp_path, tools):
+    """A server that can search df but not voudintilit answers half its tools with the
+    missing-table error — the state /ready exists to keep traffic away from."""
     import lancedb
 
     from ra_mcp_kansallisarkisto_lib.ingest import ingest_df
-    from ra_mcp_kansallisarkisto_mcp import tools
 
     uri = str(tmp_path / "db")
     ingest_df(lancedb.connect(uri), DF_FIXTURE)
     monkeypatch.setattr(tools.settings, "ka_lancedb_uri", uri)
-    monkeypatch.setattr(tools, "_search", None)
+    r = client.get("/ready")
+    assert r.status_code == 503
+    assert "voudintilit table is not available" in r.json()["reason"]
+
+
+def test_ready_is_503_while_df_is_missing(client, monkeypatch, tmp_path, tools):
+    import lancedb
+
+    from ra_mcp_kansallisarkisto_lib.ingest import ingest_voudintilit
+
+    uri = str(tmp_path / "db")
+    ingest_voudintilit(lancedb.connect(uri), VOUDINTILIT_FIXTURE, VOUDINTILIT_ASTIA_FIXTURE)
+    monkeypatch.setattr(tools.settings, "ka_lancedb_uri", uri)
+    r = client.get("/ready")
+    assert r.status_code == 503
+    assert "df table is not available" in r.json()["reason"]
+
+
+def test_ready_is_200_once_the_tables_are_there(client, monkeypatch, tmp_path, tools):
+    import lancedb
+
+    from ra_mcp_kansallisarkisto_lib.ingest import ingest_df, ingest_voudintilit
+
+    uri = str(tmp_path / "db")
+    db = lancedb.connect(uri)
+    ingest_df(db, DF_FIXTURE)
+    ingest_voudintilit(db, VOUDINTILIT_FIXTURE, VOUDINTILIT_ASTIA_FIXTURE)
+    monkeypatch.setattr(tools.settings, "ka_lancedb_uri", uri)
     r = client.get("/ready")
     assert r.status_code == 200
-    assert r.json() == {"status": "ready", "table": "df"}
+    assert r.json() == READY

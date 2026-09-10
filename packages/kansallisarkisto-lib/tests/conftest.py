@@ -14,6 +14,22 @@ FIXTURES = Path(__file__).parent / "fixtures"
 # (null coordinates), open-ended and closed dating intervals, and all four main
 # languages.
 DF_FIXTURE = FIXTURES / "df_sample.jsonl"
+# 12 real voudintilit pages from 6 volumes: both collections, both sides of a page
+# gap (1576091152 has no page 2), neighbouring pages (1578628789 p. 15–17, 1570685252
+# p. 13–15), the inverted-year volume (1615–1516), the untitled catalogue volume with
+# unknown years, and an empty page. With it, the Astia snapshot lines for those volumes.
+VOUDINTILIT_FIXTURE = FIXTURES / "voudintilit_sample.jsonl"
+VOUDINTILIT_ASTIA_FIXTURE = FIXTURES / "voudintilit_astia_sample.jsonl"
+
+
+@pytest.fixture
+def voudintilit_fixture() -> Path:
+    return VOUDINTILIT_FIXTURE
+
+
+@pytest.fixture
+def voudintilit_astia_fixture() -> Path:
+    return VOUDINTILIT_ASTIA_FIXTURE
 
 
 @pytest.fixture
@@ -44,3 +60,20 @@ def df_table(db):
 def search(db, df_table):
     """A DfSearch backed by the ingested sample."""
     return DfSearch(db)
+
+
+@pytest.fixture
+def voudintilit_table(db):
+    # Imported here rather than at the top so a module that does not ask for this
+    # fixture never depends on it.
+    from ra_mcp_kansallisarkisto_lib.ingest import ingest_voudintilit
+
+    return ingest_voudintilit(db, VOUDINTILIT_FIXTURE, VOUDINTILIT_ASTIA_FIXTURE)
+
+
+@pytest.fixture
+def voudintilit_search(db, voudintilit_table):
+    """A VoudintilitSearch backed by the ingested sample."""
+    from ra_mcp_kansallisarkisto_lib.search_operations import VoudintilitSearch
+
+    return VoudintilitSearch(db)

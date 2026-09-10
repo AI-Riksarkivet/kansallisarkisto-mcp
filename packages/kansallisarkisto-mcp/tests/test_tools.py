@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+import json
 
 import pytest
 from fastmcp import Client
@@ -10,11 +11,14 @@ from fastmcp.tools import FunctionTool
 
 from ra_mcp_kansallisarkisto_mcp import tools
 
+TOOLS = ("df_search", "df_get_charter", "voudintilit_search", "voudintilit_get_page")
+
 
 @pytest.fixture(autouse=True)
 def reset_search():
     yield
     tools._search = None
+    tools._voudintilit_search = None
 
 
 async def call(tool: str, args: dict) -> str:
@@ -23,9 +27,9 @@ async def call(tool: str, args: dict) -> str:
     return result.content[0].text
 
 
-async def test_both_tools_are_registered():
+async def test_every_tool_is_registered():
     async with Client(tools.kansallisarkisto_mcp) as client:
-        assert {t.name for t in await client.list_tools()} == {"df_search", "df_get_charter"}
+        assert {t.name for t in await client.list_tools()} == set(TOOLS)
 
 
 async def test_search_returns_formatted_hits(df_search):
@@ -103,7 +107,7 @@ async def test_search_errors_are_returned_as_text(df_search, monkeypatch):
     assert "/data/df.lance" not in out
 
 
-@pytest.mark.parametrize("name", ["df_search", "df_get_charter"])
+@pytest.mark.parametrize("name", TOOLS)
 async def test_tool_handlers_are_sync_so_they_do_not_block_the_event_loop(name):
     """FastMCP runs a coroutine tool inline but dispatches a sync one to a thread.
 
@@ -133,3 +137,78 @@ async def test_a_lancedb_valueerror_does_not_reach_the_client(df_search):
     assert out.startswith("Error: the search failed with an internal ")
     assert "year_to >=" not in out
     assert "Float64" not in out
+
+
+# --- voudintilit ----------------------------------------------------------------
+
+
+async def test_voudintilit_search_cites_reference_book_year_and_page(voudintilit_search):
+    tools._voudintilit_search = voudintilit_search
+    out = await call("voudintilit_search", {"keyword": "konung"})
+    assert "Voudintilit search results for 'konung'" in out
+    assert "**2372 Ylä-Satakunnan tilikirja 1585, p. 16**" in out
+    assert "https://astia.narc.fi/uusiastia/viewer/?fileId=8489049831&aineistoId=1578628789" in out
+
+
+async def test_voudintilit_collection_is_a_fixed_choice():
+    """The labels are Finnish genitives a free-text filter would miss, so the schema a
+    client sees offers the two keys and nothing else."""
+    tool = await tools.kansallisarkisto_mcp.get_tool("voudintilit_search")
+    assert tool is not None
+    schema = json.dumps(tool.parameters["properties"]["collection"])
+    assert '"hame"' in schema
+    assert '"satakunta"' in schema
+
+
+async def test_instructions_cover_every_tool():
+    """The server instructions are what a client reads before it calls anything; a tool
+    they never mention is one a model will not think to reach for."""
+    instructions = tools.kansallisarkisto_mcp.instructions or ""
+    assert [name for name in TOOLS if name not in instructions] == []
+
+
+async def test_voudintilit_filters_reach_the_query(voudintilit_search):
+    tools._voudintilit_search = voudintilit_search
+    out = await call("voudintilit_search", {"keyword": "smör", "collection": "hame", "limit": 100})
+    assert "Hämeen linnan tilikirja" in out
+    assert "Satakunnan voutikuntien tilejä" not in out
+
+
+async def test_voudintilit_inverted_year_range_is_reported(voudintilit_search):
+    tools._voudintilit_search = voudintilit_search
+    out = await call("voudintilit_search", {"keyword": "smör", "year_min": 1600, "year_max": 1500})
+    assert "inverted" in out
+
+
+async def test_voudintilit_get_page_gives_the_text_link_and_neighbours(voudintilit_search):
+    tools._voudintilit_search = voudintilit_search
+    out = await call("voudintilit_get_page", {"page_id": "1578628789_0016"})
+    assert "**2372 Ylä-Satakunnan tilikirja 1585, p. 16**" in out
+    assert "Text:" in out
+    assert "Bödich Fincke" in out
+    assert "Previous page: 1578628789_0015" in out
+    assert "Next page: 1578628789_0017" in out
+
+
+async def test_voudintilit_get_page_unknown_id(voudintilit_search):
+    tools._voudintilit_search = voudintilit_search
+    out = await call("voudintilit_get_page", {"page_id": "1578628789_9999"})
+    assert "No page 1578628789_9999" in out
+
+
+async def test_voudintilit_get_page_answers_a_malformed_id(voudintilit_search):
+    tools._voudintilit_search = voudintilit_search
+    out = await call("voudintilit_get_page", {"page_id": "DF 1031"})
+    assert "No page DF 1031" in out
+
+
+async def test_voudintilit_get_page_reports_a_missing_table(monkeypatch, tmp_path):
+    monkeypatch.setattr(tools.settings, "ka_lancedb_uri", str(tmp_path / "empty"))
+    out = await call("voudintilit_get_page", {"page_id": "1578628789_0016"})
+    assert "voudintilit table is not available" in out
+
+
+async def test_voudintilit_missing_table_is_reported_as_text(monkeypatch, tmp_path):
+    monkeypatch.setattr(tools.settings, "ka_lancedb_uri", str(tmp_path / "empty"))
+    out = await call("voudintilit_search", {"keyword": "konung"})
+    assert "voudintilit table is not available" in out

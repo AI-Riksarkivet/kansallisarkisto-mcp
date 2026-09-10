@@ -1,4 +1,4 @@
-.PHONY: install harvest verify-data ingest-df scan sbom serve serve-http inspect format lint typecheck check test test-mcp ci clean
+.PHONY: install harvest verify-data ingest-df fetch-astia ingest-voudintilit scan sbom serve serve-http inspect format lint typecheck check test test-mcp ci clean
 
 # Install dependencies (all workspace packages + dev group)
 install:
@@ -16,6 +16,15 @@ verify-data:
 # Build the df LanceDB table from the harvested export in .data/
 ingest-df:
 	uv run python scripts/ingest_df.py
+
+# Fetch each voudintilit volume's archival reference and page links from Astia into
+# .data/voudintilit/astia.jsonl (~3,200 requests, ~35 min, resumable)
+fetch-astia:
+	uv run python scripts/fetch_astia.py
+
+# Build the voudintilit LanceDB table from the export and the Astia snapshot in .data/
+ingest-voudintilit:
+	uv run python scripts/ingest_voudintilit.py
 
 # Run MCP server (stdio transport)
 serve:

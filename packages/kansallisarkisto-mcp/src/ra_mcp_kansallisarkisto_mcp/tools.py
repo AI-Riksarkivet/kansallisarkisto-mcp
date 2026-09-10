@@ -6,20 +6,24 @@ import threading
 
 from fastmcp import FastMCP
 
-from ra_mcp_kansallisarkisto_lib.config import DF_TABLE
+from ra_mcp_kansallisarkisto_lib.config import DF_TABLE, VOUDINTILIT_TABLE
 from ra_mcp_kansallisarkisto_lib.dataset import get_lancedb, table_names
-from ra_mcp_kansallisarkisto_lib.search_operations import DfSearch
+from ra_mcp_kansallisarkisto_lib.search_operations import DfSearch, VoudintilitSearch
 from ra_mcp_kansallisarkisto_mcp.df_tool import register_df_tools
-from ra_mcp_kansallisarkisto_mcp.errors import MISSING_TABLE, MissingTableError
+from ra_mcp_kansallisarkisto_mcp.errors import MISSING_TABLE, MISSING_VOUDINTILIT_TABLE, MissingTableError
 from ra_mcp_kansallisarkisto_mcp.routes import register_routes
 from ra_mcp_kansallisarkisto_mcp.settings import settings
+from ra_mcp_kansallisarkisto_mcp.voudintilit_tool import register_voudintilit_tools
 
 kansallisarkisto_mcp: FastMCP = FastMCP(
     name="ra-kansallisarkisto-mcp",
     instructions=(
         "Full-text search over the Kansallisarkisto (National Archives of Finland) Sisältöhaku "
-        "corpora — machine-transcribed archival text. Currently serving Diplomatarium Fennicum "
-        "(`df`): 6,876 medieval charters concerning Finland, 859–1530. "
+        "corpora — machine-transcribed archival text. Two corpora are served: Diplomatarium "
+        "Fennicum (`df`), 6,876 medieval charters concerning Finland, 859–1530, through "
+        "`df_search` and `df_get_charter`; and voudintilit, 98,945 pages of the Swedish crown's "
+        "bailiff accounts for Häme and Satakunta, 1539–1635, through `voudintilit_search` and "
+        "`voudintilit_get_page`. "
         "THE TEXT IS NOT IN FINNISH. Finland was part of the Swedish realm until 1809, and these "
         "documents are in early-modern Swedish, Latin and German. Search in the source language "
         "and in period spelling — 'bref' not 'brev', 'konung' not 'kung', 'Åbo' not 'Turku'. Only "
@@ -64,7 +68,16 @@ kansallisarkisto_mcp: FastMCP = FastMCP(
         "catalogue metadata is itself openly incomplete, so an absent place or language means "
         "'not recorded' rather than 'none'; and the corpus is far from evenly spread across its "
         "859–1530 range — 83% of it falls in 1400–1530 and only about 240 charters predate 1300, "
-        "so a thin result for an early century reflects the archive, not the search."
+        "so a thin result for an early century reflects the archive, not the search. "
+        "VOUDINTILIT is paged, not documented: each hit is one page of an account book — a volume "
+        "holding one bailiwick's accounts for one year. The pages are early-modern Swedish; only "
+        "the collection and account-book titles are Finnish. Narrow `voudintilit_search` with "
+        "collection ('hame' or 'satakunta'), account_book (a substring of the Finnish title, e.g. "
+        "'Sääksmäen', 'Hämeen linnan') and a year range. Cite a page by what each hit leads with "
+        "— reference number, account book, year and page, e.g. '2372 Ylä-Satakunnan tilikirja "
+        "1585, p. 16' — and give the user its Astia link, which opens the page image in "
+        "Kansallisarkisto's digital archive. Pass the page id to `voudintilit_get_page` for the "
+        "full text and the ids of the previous and next pages: accounts continue across pages."
     ),
 )
 
@@ -93,23 +106,45 @@ def get_search() -> DfSearch:
     return _search
 
 
-def readiness() -> tuple[bool, str]:
-    """Whether the server can actually answer a search, for the /ready probe.
+_voudintilit_search: VoudintilitSearch | None = None
+_voudintilit_lock = threading.Lock()
 
-    Goes through get_search() rather than re-implementing the check, so readiness
-    and the tools agree by construction: if this says ready, a tool call will not
-    come back with the missing-table error. Cheap after the first call — the
-    DfSearch facade is cached — and it never raises, because a probe that 500s
-    tells an orchestrator less than one that reports "not ready" and why.
+
+def get_voudintilit_search() -> VoudintilitSearch:
+    """Return the process-wide VoudintilitSearch — built lazily, as get_search is, so a
+    missing voudintilit table is a tool message rather than a failed boot."""
+    global _voudintilit_search
+    if _voudintilit_search is None:
+        with _voudintilit_lock:
+            if _voudintilit_search is None:
+                db = get_lancedb(settings.lancedb_uri)
+                if VOUDINTILIT_TABLE not in table_names(db):
+                    raise MissingTableError(MISSING_VOUDINTILIT_TABLE)
+                _voudintilit_search = VoudintilitSearch(db)
+    return _voudintilit_search
+
+
+def readiness() -> tuple[bool, str]:
+    """Whether the server can answer a search on every corpus, for the /ready probe.
+
+    Goes through the same getters the tools use, so readiness and the tools agree by
+    construction: if this says ready, no tool call will come back with the
+    missing-table error. Every table has to be searchable — a server that can search
+    df but not voudintilit answers half its tools with an error, which is exactly the
+    state a readiness probe exists to keep traffic away from. Cheap after the first
+    call, since the facades are cached, and it never raises: a probe that 500s tells an
+    orchestrator less than one that reports "not ready" and why.
     """
     try:
         get_search()
-    except MissingTableError:
-        return False, MISSING_TABLE
+        get_voudintilit_search()
+    except MissingTableError as exc:
+        return False, str(exc)
     except Exception as exc:  # noqa: BLE001 - a probe must answer, not raise
         return False, f"{type(exc).__name__}: {exc}"
-    return True, DF_TABLE
+    return True, f"{DF_TABLE}, {VOUDINTILIT_TABLE}"
 
 
 register_df_tools(kansallisarkisto_mcp, get_search)
+register_voudintilit_tools(kansallisarkisto_mcp, get_voudintilit_search)
 register_routes(kansallisarkisto_mcp, readiness)

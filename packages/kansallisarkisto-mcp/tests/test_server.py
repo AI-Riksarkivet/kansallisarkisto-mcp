@@ -76,14 +76,52 @@ def test_missing_table_is_reported_at_boot(caplog, monkeypatch, tmp_path):
     assert uri in caplog.text
 
 
-def test_boot_probe_runs_a_real_query_on_a_healthy_table(caplog, monkeypatch, tmp_path, df_fixture):
+def _ingest_both(uri: str, df_fixture, voudintilit_fixture, voudintilit_astia_fixture) -> None:
+    from ra_mcp_kansallisarkisto_lib.ingest import ingest_voudintilit
+
+    db = lancedb.connect(uri)
+    ingest_df(db, df_fixture)
+    ingest_voudintilit(db, voudintilit_fixture, voudintilit_astia_fixture)
+
+
+def test_boot_probe_runs_a_real_query_on_a_healthy_table(caplog, monkeypatch, tmp_path, df_fixture, voudintilit_fixture, voudintilit_astia_fixture):
     """Listing table names only reads the manifest — the probe must touch the index."""
+    uri = str(tmp_path / "db")
+    _ingest_both(uri, df_fixture, voudintilit_fixture, voudintilit_astia_fixture)
+    monkeypatch.setattr(server.settings, "ka_lancedb_uri", uri)
+    with caplog.at_level(logging.ERROR):
+        server.log_table_status()
+    assert caplog.text == ""
+
+
+def test_missing_voudintilit_table_is_reported_at_boot(caplog, monkeypatch, tmp_path, df_fixture):
+    """Each corpus is checked on its own: df being there says nothing about voudintilit."""
     uri = str(tmp_path / "db")
     ingest_df(lancedb.connect(uri), df_fixture)
     monkeypatch.setattr(server.settings, "ka_lancedb_uri", uri)
     with caplog.at_level(logging.ERROR):
         server.log_table_status()
-    assert caplog.text == ""
+    assert "has no 'voudintilit' table" in caplog.text
+    assert "has no 'df' table" not in caplog.text
+
+
+def test_boot_probe_checks_every_present_table(caplog, monkeypatch, tmp_path, df_fixture, voudintilit_fixture, voudintilit_astia_fixture):
+    uri = str(tmp_path / "db")
+    _ingest_both(uri, df_fixture, voudintilit_fixture, voudintilit_astia_fixture)
+    monkeypatch.setattr(server.settings, "ka_lancedb_uri", uri)
+
+    class Unreadable:
+        def __init__(self, _db): ...
+
+        def search(self, *_args, **_kwargs):
+            raise RuntimeError("lance error: Not found: /data/voudintilit.lance/_indices/x/tokens.lance")
+
+    monkeypatch.setattr(server, "VoudintilitSearch", Unreadable)
+    with caplog.at_level(logging.ERROR):
+        server.log_table_status()
+    assert "The 'voudintilit' table" in caplog.text
+    assert "cannot be queried" in caplog.text
+    assert "The 'df' table" not in caplog.text
 
 
 def test_boot_probe_explains_an_unreadable_table(caplog, monkeypatch, tmp_path, df_fixture):

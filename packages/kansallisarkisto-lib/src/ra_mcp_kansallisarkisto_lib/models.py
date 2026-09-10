@@ -1,7 +1,7 @@
 """Pydantic models for the Sisältöhaku corpora.
 
-Only ``df`` (Diplomatarium Fennicum) is modelled so far; ``voudintilit`` and
-``tuomiokirjat`` follow the same shape and will land beside it.
+``df`` (Diplomatarium Fennicum) and ``voudintilit`` (bailiff accounts) are modelled;
+``tuomiokirjat`` follows the same shape and will land beside them.
 """
 
 from __future__ import annotations
@@ -10,6 +10,8 @@ import re
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
+
+from .astia import page_url
 
 # Diplomatarium Fennicum is a scholarly edition, so its transcripts carry
 # editorial apparatus inline: footnote markers as superscripts fused to the word
@@ -153,3 +155,84 @@ class DfRecord(BaseModel):
             self.language,
         ]
         return " ".join(p for p in parts if p)
+
+
+class VoudintilitRecord(BaseModel):
+    """One page of a bailiff's account book — the Häme and Satakunta accounts, 1539–1635.
+
+    A record is a page, not a document: the source's ``ay_id`` is the volume (one
+    account book for one year) and ``file_id`` the page within it. Columns are named in
+    English rather than after the source (``arkistoyksikkö``, ``aineistokokonaisuus``):
+    LanceDB filter predicates name their columns bare, and a non-ASCII identifier is not
+    one to trust its parser with. The mapping is in the docs' corpus reference.
+
+    Joined at ingest with the volume's line from the Astia snapshot
+    (:mod:`ra_mcp_kansallisarkisto_lib.astia`), which supplies what the export lacks: the
+    archival reference, the series, and each page's viewer link.
+    """
+
+    page_id: str
+    volume_id: int
+    # Derived: the page number `file_id` spells as a zero-padded string ("0016").
+    page: int | None = None
+    file_id: str = ""
+    collection: str = ""
+    account_book: str = ""
+    reference: str = ""
+    series: str = ""
+    year_start: int | None = None
+    year_end: int | None = None
+    # Derived: the year interval with the unknowns closed, as for df, so a date filter is
+    # a two-column overlap test.
+    year_from: int | None = None
+    year_to: int | None = None
+    text: str = ""
+    url: str = ""
+
+    @classmethod
+    def from_json(cls, row: dict[str, Any], volume: dict[str, Any] | None) -> VoudintilitRecord:
+        """Build a page from one line of ``voudintilit.jsonl.gz`` and its volume's Astia entry.
+
+        ``volume`` is ``None`` when the snapshot has no entry for the volume; the page is
+        then kept, without a reference or a link. As for df, only ``ValueError`` and
+        ``TypeError`` may escape — a missing ``ay_id`` becomes ``int(None)``, a
+        ``TypeError`` the ingest skips the line on, rather than a ``KeyError`` that would
+        abort the run.
+        """
+        volume = volume or {}
+        volume_id = int(row.get("ay_id"))  # ty: ignore[invalid-argument-type]
+        file_id = _clean(row.get("file_id"))
+        page = int(file_id) if file_id.isdigit() else None
+        astia_file = (volume.get("files") or {}).get(page) if page is not None else None
+
+        start, end = _year(row.get("alkuvuosi")), _year(row.get("loppuvuosi"))
+        low, high = start, end
+        if low is not None and high is not None and high < low:
+            # One volume reads 1615–1516, in Astia's own catalogue too. The end year
+            # precedes the corpus, so the start is the one to trust; widening to the
+            # span would put its pages in every century's results.
+            high = low
+
+        return cls(
+            page_id=_clean(row.get("objectID")),
+            volume_id=volume_id,
+            page=page,
+            file_id=file_id,
+            # The export leaves the Satakunta catalogue volume untitled; Astia names it.
+            collection=_clean(row.get("aineistokokonaisuus")) or _clean(volume.get("fonds")),
+            account_book=_clean(row.get("arkistoyksikkö")) or _clean(volume.get("title")),
+            reference=_clean(volume.get("reference")),
+            series=_clean(volume.get("series")),
+            year_start=start,
+            year_end=end,
+            year_from=low if low is not None else high,
+            year_to=high if high is not None else low,
+            text=_clean(row.get("teksti")),
+            url=page_url(volume_id, astia_file) if astia_file else "",
+        )
+
+    @property
+    def searchable_text(self) -> str:
+        """The text the full-text index is built over: the page, its account book and
+        collection — the same three fields Sisältöhaku's own search covers."""
+        return " ".join(p for p in (self.text, self.account_book, self.collection) if p)

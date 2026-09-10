@@ -110,6 +110,73 @@ def format_charter(rec: dict[str, Any] | None, df_number: str | int) -> str:
     return "\n".join(lines)
 
 
+# --- voudintilit pages ----------------------------------------------------------
+
+
+def _years(rec: dict[str, Any]) -> str:
+    """The account year or range, or "" for an undated volume.
+
+    Read from the derived ``year_from`` / ``year_to``, so the one inverted volume
+    (1615–1516 in the source) reads as 1615 — the same year it filters by.
+    """
+    low, high = rec.get("year_from"), rec.get("year_to")
+    if low is None and high is None:
+        return ""
+    if low is None or high is None or low == high:
+        return str(low if low is not None else high)
+    return f"{low}–{high}"
+
+
+def _page_citation(rec: dict[str, Any]) -> str:
+    """What a researcher writes down: reference, account book, year, page."""
+    book = _oneline(str(rec.get("account_book") or "")) or "untitled volume"
+    head = " ".join(part for part in (_oneline(str(rec.get("reference") or "")), book, _years(rec)) if part)
+    page = rec.get("page")
+    return f"**{head}, p. {page}**" if page is not None else f"**{head}**"
+
+
+def _render_page(rec: dict[str, Any], lines: list[str]) -> None:
+    lines.append(_page_citation(rec))
+    details = [_oneline(str(rec.get("collection") or "")), f"page {_oneline(str(rec.get('page_id') or '?'))}"]
+    lines.append("  " + " · ".join(d for d in details if d))
+    text = rec.get("text") or ""
+    lines.append(f"  {_snippet(text)}" if text.strip() else "  (no text recognised on this page)")
+    url = _oneline(str(rec.get("url") or ""))
+    lines.append(f"  {url}" if url else "  (no Astia link for this page)")
+    lines.append("")
+
+
+def format_voudintilit_results(result: SearchResult) -> str:
+    return format_results(result, label="Voudintilit", render_record=_render_page)
+
+
+def format_page(rec: dict[str, Any] | None, page_id: str) -> str:
+    """Render one page in full, with the ids to read on in either direction."""
+    if rec is None:
+        return f"No page {_oneline(str(page_id))} in voudintilit. A page id is '<volume>_<page>', as shown on every voudintilit_search hit — e.g. '1578628789_0016'."
+
+    lines = [_page_citation(rec), ""]
+    if rec.get("collection"):
+        lines.append(f"Collection: {_oneline(rec['collection'])}")
+    if rec.get("series"):
+        lines.append(f"Series: {_oneline(rec['series'])}")
+    lines.append(f"Page id: {_oneline(str(rec.get('page_id') or page_id))}")
+    url = _oneline(str(rec.get("url") or ""))
+    lines.append(f"Page image in Astia: {url}" if url else "No Astia link for this page.")
+    previous, following = rec.get("previous_page_id"), rec.get("next_page_id")
+    lines.append(f"Previous page: {_oneline(previous)}" if previous else "Previous page: none (first page of this volume in the corpus)")
+    lines.append(f"Next page: {_oneline(following)}" if following else "Next page: none (last page of this volume in the corpus)")
+    lines.append("")
+
+    text = (rec.get("text") or "").strip()
+    if text:
+        lines.append("Text:")
+        lines.append(text)
+    else:
+        lines.append("No text was recognised on this page.")
+    return "\n".join(lines)
+
+
 def format_error(exc: Exception) -> str:
     """Render an unexpected failure for the client.
 

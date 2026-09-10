@@ -33,9 +33,10 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 # One LanceDB database holds one table per corpus, so a single URI covers all
-# three and each table can be built and shipped independently. voudintilit and
-# tuomiokirjat get their names here when they get an ingest.
+# three and each table can be built and shipped independently. tuomiokirjat gets
+# its name here when it gets an ingest.
 DF_TABLE = "df"
+VOUDINTILIT_TABLE = "voudintilit"
 
 MOUNT_DIR = Path("/data")
 

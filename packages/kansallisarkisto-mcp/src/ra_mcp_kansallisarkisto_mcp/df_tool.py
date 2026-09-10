@@ -12,48 +12,16 @@ so the threadpool is safe.
 
 from __future__ import annotations
 
-import logging
-from collections.abc import Callable
 from typing import Annotated
 
 from fastmcp import FastMCP
 from pydantic import Field
 
 from ra_mcp_kansallisarkisto_lib.config import DEFAULT_LIMIT, MAX_LIMIT
-from ra_mcp_kansallisarkisto_lib.dataset import SearchInputError, require_keyword, require_ordered_range
-from ra_mcp_kansallisarkisto_lib.telemetry import mark_span_error, record_span_exception
-from ra_mcp_kansallisarkisto_mcp.errors import MissingTableError
-from ra_mcp_kansallisarkisto_mcp.formatter import format_charter, format_error, format_search_results
-
-logger = logging.getLogger(__name__)
-
-
-def _answer(tool: str, produce: Callable[[], str]) -> str:
-    """Run a tool body, turning every failure into text the model can act on.
-
-    Shared rather than repeated because the two tools had already drifted:
-    `df_get_charter` was missing the `SearchInputError` branch. Formatting runs
-    inside the try too, so nothing escapes as a protocol error.
-    """
-    try:
-        return produce()
-    except MissingTableError as exc:
-        # A deployment state the operator can fix, so it is explained in full.
-        mark_span_error(str(exc), "missing_table")
-        return str(exc)
-    except SearchInputError as exc:
-        # This library's own guards only — a blank keyword, a bad page, fuzzy on
-        # a quoted phrase — so the message is written for the caller. Not
-        # `except ValueError`: lancedb raises that too, and its messages quote
-        # dataset paths a broad catch would hand to a public HTTP client.
-        mark_span_error(str(exc), "validation")
-        return f"Error: {exc}"
-    except Exception as exc:  # noqa: BLE001 - by design: nothing raises out to the client
-        # record_span_exception keeps one failure to one traceback; the spine may
-        # already have logged it. format_error keeps the message out of the reply.
-        record_span_exception(logger, exc)
-        mark_span_error(f"{tool} failed: {type(exc).__name__}")
-        return format_error(exc)
+from ra_mcp_kansallisarkisto_lib.dataset import require_keyword, require_ordered_range
+from ra_mcp_kansallisarkisto_lib.telemetry import mark_span_error
+from ra_mcp_kansallisarkisto_mcp.errors import answer
+from ra_mcp_kansallisarkisto_mcp.formatter import format_charter, format_search_results
 
 
 def register_df_tools(mcp: FastMCP, get_search) -> None:
@@ -177,7 +145,7 @@ def register_df_tools(mcp: FastMCP, get_search) -> None:
         if err := require_ordered_range(year_min, year_max, "year"):
             mark_span_error(err, "validation")
             return err
-        return _answer(
+        return answer(
             "df_search",
             lambda: format_search_results(
                 get_search().search(
@@ -215,4 +183,4 @@ def register_df_tools(mcp: FastMCP, get_search) -> None:
     ) -> str:
         # A charter that does not exist is a normal answer, not a failure — the
         # span stays OK and the miss is recorded on the operations span instead.
-        return _answer("df_get_charter", lambda: format_charter(get_search().get_charter(df_number), df_number))
+        return answer("df_get_charter", lambda: format_charter(get_search().get_charter(df_number), df_number))

@@ -6,9 +6,10 @@ import (
 	"fmt"
 )
 
-// TestMcp runs the end-to-end MCP smoke test: the production image serving a
-// real LanceDB table built from the 18-charter test fixture, with a real fastmcp
-// client (scripts/mcp_smoke.py) listing and calling both tools.
+// TestMcp runs the end-to-end MCP smoke test: the production image serving real
+// LanceDB tables built from the test fixtures (18 df charters, 12 voudintilit
+// pages), with a real fastmcp client (scripts/mcp_smoke.py) listing and calling
+// every tool.
 //
 // It is the only place the index configuration is actually verified end to end:
 // Swedish stemming and accent folding are index-time settings, so a wrong FTS

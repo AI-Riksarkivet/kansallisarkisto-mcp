@@ -1,6 +1,6 @@
 """Tests for DfRecord — the source-JSON conventions it has to normalise."""
 
-from ra_mcp_kansallisarkisto_lib.models import DfRecord
+from ra_mcp_kansallisarkisto_lib.models import DfRecord, VoudintilitRecord
 
 
 def test_unknown_year_zero_becomes_none():
@@ -86,3 +86,82 @@ def test_unparseable_years_are_unknown_rather_than_an_error():
 
     for value in ("", "n.d.", None, "circa 1400"):
         assert _year(value) is None
+
+
+# --- voudintilit: one page of a bailiff's account book --------------------------
+
+# Shaped like the real page 1578628789_0016 and its volume's Astia snapshot line; the
+# file ids are illustrative.
+VOLUME = {
+    "volume_id": 1578628789,
+    "reference": "2372",
+    "title": "Ylä-Satakunnan tilikirja",
+    "dates": "xx.xx.1585-xx.xx.1585",
+    "fonds": "Satakunnan voutikuntien tilejä",
+    "series": "Asiakirjat",
+    "files": {15: "8489049754", 16: "8489049755"},
+}
+PAGE = {
+    "objectID": "1578628789_0016",
+    "alkuvuosi": 1585,
+    "loppuvuosi": 1585,
+    "arkistoyksikkö": "Ylä-Satakunnan tilikirja",
+    "ay_id": 1578628789,
+    "file_id": "0016",
+    "teksti": "Bödich Fincke\nHaffwer Konung Matt gunsteligen förlänth",
+    "aineistokokonaisuus": "Satakunnan voutikuntien tilejä",
+}
+
+
+def test_voudintilit_page_number_comes_from_the_zero_padded_file_id():
+    record = VoudintilitRecord.from_json(PAGE, VOLUME)
+    assert (record.page_id, record.volume_id, record.page, record.file_id) == ("1578628789_0016", 1578628789, 16, "0016")
+
+
+def test_voudintilit_page_links_to_its_image_in_astia():
+    record = VoudintilitRecord.from_json(PAGE, VOLUME)
+    assert record.url == "https://astia.narc.fi/uusiastia/viewer/?fileId=8489049755&aineistoId=1578628789"
+    assert (record.reference, record.series) == ("2372", "Asiakirjat")
+
+
+def test_voudintilit_page_without_an_astia_volume_has_no_link_or_reference():
+    record = VoudintilitRecord.from_json(PAGE, None)
+    assert (record.url, record.reference) == ("", "")
+
+
+def test_voudintilit_page_missing_from_astias_image_list_has_no_link():
+    """Astia and Sisältöhaku disagree on some volumes' pages; the reference still holds."""
+    record = VoudintilitRecord.from_json({**PAGE, "file_id": "0017", "objectID": "1578628789_0017"}, VOLUME)
+    assert (record.url, record.reference) == ("", "2372")
+
+
+def test_voudintilit_unknown_years_become_none():
+    """66 pages, all in the Satakunta catalogue volume, carry 0 for both years."""
+    record = VoudintilitRecord.from_json({**PAGE, "alkuvuosi": 0, "loppuvuosi": 0}, VOLUME)
+    assert (record.year_start, record.year_end, record.year_from, record.year_to) == (None, None, None, None)
+
+
+def test_voudintilit_inverted_years_keep_the_start_year():
+    """27 pages in one volume say 1615–1516. The end precedes the corpus (1539), so it
+    is the typo; widening to 1516–1615 would put them in every century's results."""
+    record = VoudintilitRecord.from_json({**PAGE, "alkuvuosi": 1615, "loppuvuosi": 1516}, VOLUME)
+    assert (record.year_start, record.year_end) == (1615, 1516)
+    assert (record.year_from, record.year_to) == (1615, 1615)
+
+
+def test_voudintilit_untitled_volume_takes_astias_title():
+    """The export leaves the catalogue volume untitled; Astia names it."""
+    record = VoudintilitRecord.from_json({**PAGE, "arkistoyksikkö": ""}, {**VOLUME, "title": "Satakunnan voudintilien arkistoluettelo"})
+    assert record.account_book == "Satakunnan voudintilien arkistoluettelo"
+
+
+def test_voudintilit_searchable_text_matches_what_sisaltohaku_searches():
+    """Sisältöhaku's own search attributes for this corpus: text, account book, collection."""
+    text = VoudintilitRecord.from_json(PAGE, VOLUME).searchable_text
+    for part in ("Bödich Fincke", "Ylä-Satakunnan tilikirja", "Satakunnan voutikuntien tilejä"):
+        assert part in text
+
+
+def test_voudintilit_malformed_page_number_is_not_an_uncatchable_error():
+    record = VoudintilitRecord.from_json({**PAGE, "file_id": "x"}, VOLUME)
+    assert (record.page, record.url) == (None, "")

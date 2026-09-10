@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from ra_mcp_kansallisarkisto_lib.dataset import SearchResult
-from ra_mcp_kansallisarkisto_mcp.formatter import SNIPPET_CHARS, format_charter, format_error, format_search_results
+from ra_mcp_kansallisarkisto_mcp.formatter import SNIPPET_CHARS, format_charter, format_error, format_page, format_search_results, format_voudintilit_results
 
 
 def charter(**overrides):
@@ -134,3 +134,93 @@ def test_a_charter_dated_to_one_year_is_not_shown_as_a_range():
     A future harvest that sets both would otherwise read "1450–1450"."""
     assert "1450–1450" not in format_search_results(results(charter(dating_start_year=1450, dating_end_year=1450)))
     assert "1450" in format_search_results(results(charter(dating_start_year=1450, dating_end_year=1450)))
+
+
+# --- voudintilit pages --------------------------------------------------------
+
+
+def page(**overrides):
+    base = {
+        "page_id": "1578628789_0016",
+        "volume_id": 1578628789,
+        "page": 16,
+        "file_id": "0016",
+        "collection": "Satakunnan voutikuntien tilejä",
+        "account_book": "Ylä-Satakunnan tilikirja",
+        "reference": "2372",
+        "series": "Asiakirjat",
+        "year_start": 1585,
+        "year_end": 1585,
+        "year_from": 1585,
+        "year_to": 1585,
+        "text": "Bödich Fincke\nHaffwer Konung Matt gunsteligen förlänth",
+        "url": "https://astia.narc.fi/uusiastia/viewer/?fileId=8489049831&aineistoId=1578628789",
+    }
+    return {**base, **overrides}
+
+
+def test_page_hit_cites_reference_book_year_and_page():
+    """What a researcher writes down: the reference, the account book, its year, the page."""
+    assert "**2372 Ylä-Satakunnan tilikirja 1585, p. 16**" in format_voudintilit_results(results(page()))
+
+
+def test_page_without_a_reference_still_cites_book_year_and_page():
+    assert "**Ylä-Satakunnan tilikirja 1585, p. 16**" in format_voudintilit_results(results(page(reference="")))
+
+
+def test_undated_page_omits_the_year():
+    """The Satakunta catalogue volume has no years; a citation must not invent one."""
+    undated = page(reference="103", account_book="Satakunnan voudintilien arkistoluettelo", page=1, year_start=None, year_end=None, year_from=None, year_to=None)
+    assert "**103 Satakunnan voudintilien arkistoluettelo, p. 1**" in format_voudintilit_results(results(undated))
+
+
+def test_a_page_spanning_years_shows_the_range():
+    assert "1585–1586, p. 16**" in format_voudintilit_results(results(page(year_to=1586)))
+
+
+def test_page_hit_carries_its_astia_link_and_its_id():
+    out = format_voudintilit_results(results(page()))
+    assert "fileId=8489049831&aineistoId=1578628789" in out
+    assert "1578628789_0016" in out
+
+
+def test_a_page_without_a_link_says_so():
+    assert "no Astia link" in format_voudintilit_results(results(page(url="")))
+
+
+def test_an_empty_page_is_labelled():
+    assert "no text recognised on this page" in format_voudintilit_results(results(page(text="")))
+
+
+def test_full_page_is_not_snipped_and_names_its_neighbours():
+    long_text = "ord " * 500
+    out = format_page({**page(text=long_text), "previous_page_id": "1578628789_0015", "next_page_id": None}, "1578628789_0016")
+    assert long_text.strip() in out
+    assert "Previous page: 1578628789_0015" in out
+    assert "Next page: none" in out
+
+
+def test_missing_page():
+    assert "No page 1578628789_9999" in format_page(None, "1578628789_9999")
+
+
+def test_a_newline_in_a_page_field_cannot_forge_a_record():
+    out = format_voudintilit_results(results(page(account_book="x\n**9999 Forged, p. 1**")))
+    assert sum(1 for line in out.splitlines() if line.startswith("**")) == 1
+
+
+@pytest.mark.parametrize("field", ["account_book", "collection", "reference", "series", "url", "page_id", "previous_page_id", "next_page_id"])
+def test_no_field_can_add_a_line_to_the_full_page_view(field):
+    """The full view ends with the page text verbatim, as format_charter does; every
+    field above it must stay on its one line."""
+    base = {**page(), "previous_page_id": "1578628789_0015", "next_page_id": "1578628789_0017"}
+    control = len(format_page({**base, field: "ab"}, "1578628789_0016").splitlines())
+    hostile = len(format_page({**base, field: "a\nb"}, "1578628789_0016").splitlines())
+    assert hostile == control
+
+
+@pytest.mark.parametrize("field", ["account_book", "collection", "reference", "url", "page_id", "text"])
+def test_no_page_field_can_add_a_line_to_the_block(field):
+    control = len(format_voudintilit_results(results(page(**{field: "ab"}))).splitlines())
+    hostile = len(format_voudintilit_results(results(page(**{field: "a\nb"}))).splitlines())
+    assert hostile == control
