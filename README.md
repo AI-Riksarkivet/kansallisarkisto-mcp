@@ -23,10 +23,11 @@
 MCP server over the **Sisältöhaku** corpora of Kansallisarkisto, the National Archives of
 Finland — full-text search across machine-transcribed archival text, served from LanceDB.
 
-Currently serving **Diplomatarium Fennicum** (`df`): 6,876 medieval charters, letters and
-account entries concerning Finland, 859–1530. The two larger corpora — `voudintilit`
-(98,945 bailiff accounts, 1539–1634) and `tuomiokirjat` (7,835,557 court-record pages,
-1600s–1900s) — are harvested and documented but not yet ingested.
+Currently serving two corpora: **Diplomatarium Fennicum** (`df`), 6,876 medieval charters,
+letters and account entries concerning Finland, 859–1530; and **`voudintilit`**, 98,945 pages
+of the Swedish crown's bailiff accounts for Häme and Satakunta, 1539–1635, each cited by its
+archival reference and linked to its page image in Astia. The largest, `tuomiokirjat`
+(7,835,557 court-record pages, 1600s–1900s), is harvested and documented but not yet ingested.
 
 The range is wide but the weight is late: 83% of `df` falls in 1400–1530 and barely 240
 charters predate 1300, so a thin result for an early century is the archive rather than the
@@ -34,7 +35,16 @@ query.
 
 ## Quick start
 
-Harvesting `df` takes about three seconds — two HTTP requests, 3 MB — so trying this is cheap:
+The server is hosted on Hugging Face, so the quickest start is to connect to it:
+
+```bash
+claude mcp add --transport http kansallisarkisto https://riksarkivet-kansallisarkisto-mcp.hf.space/mcp
+```
+
+For claude.ai, add a custom connector with the same URL.
+
+Running it yourself is cheap too — harvesting `df` takes about three seconds, two HTTP
+requests, 3 MB:
 
 ```bash
 make install
@@ -104,12 +114,32 @@ National Archives' own edition of that charter, with the printed-edition referen
 and any images. That is the link to give a reader; a DF number identifies the document as an
 informational entity, not one particular edition, so it stays valid as editions change.
 
+For `voudintilit`:
+
+- `voudintilit_search(keyword, offset=0, limit=25, collection?, account_book?, year_min?, year_max?, match_all=true, fuzzy=0)`
+  — full-text search over the bailiff-account pages, in early-modern Swedish. `collection` is
+  `hame` or `satakunta`; `account_book` is a substring of the Finnish title (`Sääksmäen`,
+  `Hämeen linnan`, `Maakirja`). Each hit is one page, led by its citation — reference number,
+  account book, year and page, such as **2372 Ylä-Satakunnan tilikirja 1585, p. 16** — and
+  linked to its image in Astia.
+- `voudintilit_get_page(page_id)` — one page's full text, with the ids of the previous and next
+  pages in its volume: accounts run across pages.
+
 ## Run locally
 
 No corpus ships with this repository — `.data/` and `data/` are both git-ignored, and the
 data is re-harvested rather than versioned. `make harvest` takes `df` alone, which is the
-three-second path above. The other two are a different proposition: `voudintilit` is about a
-minute, `tuomiokirjat` about 1.5 hours and 6.3 GB, and neither is ingested yet.
+three-second path above. `voudintilit` harvests in about a minute, and its Astia snapshot —
+the archival references and page links — takes about 35 minutes more:
+
+```bash
+uv run python scripts/harvest.py --index voudintilit
+make fetch-astia          # ~3,200 requests to Astia, resumable
+make ingest-voudintilit
+```
+
+`tuomiokirjat` is a different proposition — about 1.5 hours and 6.3 GB — and is not ingested
+yet.
 
 ```bash
 uv run python scripts/harvest.py --index all        # all three corpora (6.3 GB)
@@ -145,6 +175,8 @@ message rather than crashing, and the boot log names the tables it did find.
 | variable | default | meaning |
 |---|---|---|
 | `KA_LANCEDB_URI` | *(resolved)* | Where the LanceDB tables live. Unset resolves to `<project root>/data` in a clone, `/data` in the image. Any lancedb URI works, including `s3://`. |
+| `KA_MCP_STAGE_DATASETS` | `false` | Copy the tables onto local disk at boot and serve the copy. For a Hugging Face Space, whose bucket mount lance cannot query under load — see [Deployment](docs/development/deployment.md#hugging-face-space). |
+| `KA_MCP_STAGE_DIR` | `/data-local` | Where that copy goes. Must be writable by the runtime user. |
 | `KA_MCP_TRANSPORT` | `stdio` | `stdio` or `http`. |
 | `HOST` / `PORT` | `0.0.0.0` / `8000` | HTTP bind address. |
 | `LOG_LEVEL` | `INFO` | Root log level; logs go to stderr so stdio transport stays clean. |
@@ -213,8 +245,10 @@ make ci        # the full pipeline GitHub Actions runs
 
 The three supply-chain badges above describe the release pipeline in
 [`publish.yml`](.github/workflows/publish.yml), each linking to the section of the security
-docs that says how it is produced. Nothing has been released yet — there are no tags — so
-they state how this project releases, not yet something you can download and verify.
+docs that says how it is produced. The first release,
+[v0.1.0](https://github.com/AI-Riksarkivet/kansallisarkisto-mcp/releases/tag/v0.1.0), went
+through all of it: the image `riksarkivet/kansallisarkisto-mcp` is signed, and its SBOMs and
+provenance are attached to the release.
 
 `packages/kansallisarkisto-lib/tests/fixtures/df_sample.jsonl` holds 18 real charters chosen
 to cover the corpus's documented traps — untranscribed records, unknown years, unlocated

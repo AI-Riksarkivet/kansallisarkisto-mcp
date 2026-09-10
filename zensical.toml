@@ -27,6 +27,8 @@ nav = [
     {"Overview" = "tools/index.md"},
     {"df_search" = "tools/df-search.md"},
     {"df_get_charter" = "tools/df-get-charter.md"},
+    {"voudintilit_search" = "tools/voudintilit-search.md"},
+    {"voudintilit_get_page" = "tools/voudintilit-get-page.md"},
   ]},
   { "API" = [
     {"Overview" = "api/index.md"},

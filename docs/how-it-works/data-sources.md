@@ -11,7 +11,7 @@ documents** — 19.4 GB of text — spanning **859 to 1938**.
 | corpus | documents | text | period | content | ingested |
 |---|---:|---:|---|---|---|
 | `tuomiokirjat` | 7,835,557 | 19.25 GB | 1600s–1900s | Court records | not yet |
-| `voudintilit` | 98,945 | 131 MB | 1539–1634 | Bailiff accounts | not yet |
+| `voudintilit` | 98,945 | 131 MB | 1539–1635 | Bailiff accounts | **yes** |
 | `df` | 6,876 | 7.4 MB | 859–1530 | Medieval charters | **yes** |
 
 The harvest lives in `.data/`, which is git-ignored: 6.3 GB of gzipped JSON Lines has no
@@ -149,6 +149,80 @@ exclusive: a fuzzy term skips analysis and `konungen` drops from 279 hits to 6. 
 Recovering the fused words moved the verified reference counts slightly upward — `konung`
 277 → 279, `ecclesia` 600 → 602 — which is what recovered recall looks like. `DF 3453`, for
 instance, reads `eccl[esi]a` in the source and was previously unreachable by `ecclesia`.
+
+## `voudintilit` — bailiff accounts
+
+The Swedish crown's bailiff accounts for the Häme and Satakunta bailiwicks, 1539–1635 — the
+yearly account books in which the bailiffs recorded the taxes they collected. A record is a
+**page**, not a document: 98,945 pages from 1,582 volumes, each volume one bailiwick's
+accounts for one year. Every volume carries exactly one title and one year pair.
+
+| source field | type | becomes | meaning |
+|---|---|---|---|
+| `objectID` | string | `page_id` | Always `<ay_id>_<file_id>` — the handle `voudintilit_get_page` takes |
+| `ay_id` | int | `volume_id` | The volume; Astia's `aineistoId` |
+| `file_id` | zero-padded string | `file_id`, `page` | The page within the volume, always four digits |
+| `aineistokokonaisuus` | string | `collection` | *Hämeen voutikuntien tilejä* (54,560 pages) or *Satakunnan voutikuntien tilejä* (44,385) |
+| `arkistoyksikkö` | string | `account_book` | The account book's title — 292 distinct, such as *Sääksmäen voutikunnan tilikirja* or *Maakirja* |
+| `alkuvuosi` | int | `year_start`, `year_from` | First year |
+| `loppuvuosi` | int | `year_end`, `year_to` | Last year |
+| `teksti` | string | `text` | Transcribed text |
+
+Plus `searchable_text` — the text, account book and collection, the same three fields
+Sisältöhaku's own search covers — and the `reference`, `series` and `url` joined from Astia.
+Columns are named in English rather than after the source: LanceDB filter predicates name
+their columns bare, and `arkistoyksikkö` is not an identifier to trust its parser with.
+
+### Citations come from Astia
+
+The export carries no link and no archival reference, and neither does Sisältöhaku's own
+interface. Astia, Kansallisarkisto's digital archive, has both, through the two public JSON
+endpoints its viewer calls: one gives a volume's reference number (`tunnisteet`, e.g. `2372`),
+title, dates, fonds and series; the other lists every image in the volume, titled
+`Tiedosto N`, with the file id the viewer addresses it by. Page N is `Tiedosto N`, so every
+page gets an exact link:
+
+```
+https://astia.narc.fi/uusiastia/viewer/?fileId=<file id>&aineistoId=<volume>
+```
+
+`scripts/fetch_astia.py` (`make fetch-astia`) fetches both once per volume — about 3,200
+requests — into `.data/voudintilit/astia.jsonl`, and the ingest joins them. That happens at
+harvest time, never while serving: the endpoints are undocumented, and a serving path that
+depended on them would inherit every change Astia makes. A volume the snapshot lacks is
+ingested without a reference or link rather than dropped.
+
+### Its traps
+
+**Page numbers have gaps.** 106 volumes skip pages and 318 do not start at page 1, because
+Astia holds images Sisältöhaku has no text for — volume 1576091152 has 138 images and 136
+pages of text. `voudintilit_get_page` therefore names the nearest *existing* page on either
+side, not N ± 1.
+
+**The collection labels are Finnish genitives.** `Satakunta` as a substring matches neither
+*Satakunnan voutikuntien tilejä* nor anything else, so the filter is a fixed choice — `hame`
+or `satakunta` — mapped to the full label.
+
+**One volume's years are inverted.** Reference 2523, *Ylä-Satakunnan tilikirja*, reads
+1615–1516, in Astia's own catalogue as well. The end year precedes the corpus, so it is the
+typo: the ingest keeps the start year for both bounds rather than stretching its 27 pages
+across a century.
+
+**One volume is not an account book.** The 66 pages with `0` for both years are all the
+Satakunta series' archive catalogue — *Satakunnan voudintilien arkistoluettelo*, reference
+103 — untitled in the export and named by Astia. They have no year, so any year filter leaves
+them out.
+
+**Three pages have no text.** They stay findable by account book and collection, which are
+indexed with the text, and are labelled rather than shown blank.
+
+### Can every page be found?
+
+Every page was swept the way the `df` charters were: search the page's rarest word and check
+the page comes back, retrying with its next-rarest words where the index splits a word
+differently. **96,978 of the 98,945 pages** come back by a word of their own. The other 1,967
+are inconclusive rather than lost — once stemmed, even their rarest words return more than the
+100 results the sweep read, so the page may simply rank beyond them. None was missed.
 
 ## Choosing an analyzer
 

@@ -65,10 +65,41 @@ The server diagnoses this at boot rather than leaving it to the first query: aft
 tables it runs one real search, and an unreadable table produces a startup error naming the
 ownership cause. Non-fatal — a table mounted late should still start working.
 
+## Hugging Face Space
+
+The server is hosted at <https://huggingface.co/spaces/Riksarkivet/kansallisarkisto-mcp>; MCP
+clients connect to `https://riksarkivet-kansallisarkisto-mcp.hf.space/mcp`. The Space runs the
+published image: its Dockerfile is [`.docker/hf.dockerfile`](https://github.com/AI-Riksarkivet/kansallisarkisto-mcp/blob/main/.docker/hf.dockerfile),
+which is `FROM` a release tag plus two settings.
+
+The tables live in the private `Riksarkivet/kansallisarkisto` storage bucket, mounted
+read-only at `/data`. That mount is a Xet-backed FUSE layer, and lance's concurrent random
+reads fail on it under load with `os error 5` (EIO) — ra-mcp found this first. So the Space
+sets `KA_MCP_STAGE_DATASETS=1`: at boot the server copies the tables from `/data` onto the
+Space's ordinary disk (`KA_MCP_STAGE_DIR`, `/data-local`) and serves the copy. One sequential
+read of the mount at boot is fine; it is the random reads at query time that fail. A copy
+that fails is deleted rather than served, and the server falls back to the mount.
+
+To publish new data, mirror `data/` into the bucket (this needs a recent `hf` CLI), then
+restart the Space so it copies the new tables:
+
+```bash
+hf buckets sync --delete data hf://buckets/Riksarkivet/kansallisarkisto
+```
+
+To deploy a release, bump the tag in `.docker/hf.dockerfile` and upload it as the Space's
+Dockerfile:
+
+```bash
+hf upload Riksarkivet/kansallisarkisto-mcp .docker/hf.dockerfile Dockerfile --repo-type space
+```
+
 ## Building the data
 
-The tables are built by `make ingest-df` (or `scripts/ingest_df.py --output <path>`) from a
-harvest of the Sisältöhaku export endpoint. Building an index mutates the on-disk dataset, so
+The tables are built by `make ingest-df` and `make ingest-voudintilit` (or the scripts they
+call, with `--output <path>`) from a harvest of the Sisältöhaku export endpoint. `voudintilit`
+also joins the Astia snapshot, `make fetch-astia`, for its references and page links — see
+[The Corpora](../how-it-works/data-sources.md#voudintilit-bailiff-accounts). Building an index mutates the on-disk dataset, so
 indexes are baked in at ingest time and the served copy is read-only.
 
 ## Release

@@ -9,7 +9,9 @@ the National Archives of Finland. It gives an AI assistant full-text search acro
 machine-transcribed archival text, served locally from LanceDB rather than from a live API.
 
 Currently serving **Diplomatarium Fennicum** (`df`) — the scholarly edition of 6,876 medieval
-charters, letters and account entries concerning Finland, 859–1530.
+charters, letters and account entries concerning Finland, 859–1530 — and **`voudintilit`**:
+98,945 pages of the Swedish crown's bailiff accounts for Häme and Satakunta, 1539–1635, each
+cited by its archival reference and linked to its page image in Astia.
 
 ## The text is not in Finnish
 
@@ -33,16 +35,29 @@ under their modern name, so `Tallinn` finds 197 charters and `Reval` finds none.
   country of issue, and year range. Swedish stemming and accent folding are applied. Each hit
   leads with its DF number, the citable identifier; page with `offset`.
 - **`df_get_charter`** — one charter's full transcript and catalogue record by DF number.
+- **`voudintilit_search`** — full-text search over the bailiff-account pages, narrowable by
+  bailiwick, account book and year range. Each hit is one page, led by its citation —
+  reference number, account book, year and page — and linked to its image in Astia.
+- **`voudintilit_get_page`** — one page's full text by page id, with the previous and next
+  pages of its volume.
 
 Every DF number resolves to `https://df.kansallisarkisto.fi/document/<number>`, the National
 Archives' own edition of that charter — the link to hand a reader alongside the number.
 
 ## Quick connect
 
-There is no hosted endpoint yet. Run it from a clone over stdio:
+The server is hosted on Hugging Face:
+
+```bash
+claude mcp add --transport http kansallisarkisto https://riksarkivet-kansallisarkisto-mcp.hf.space/mcp
+```
+
+For claude.ai, add a custom connector with the same URL. To run it yourself from a clone over
+stdio instead:
 
 ```bash
 make install
+make harvest
 make ingest-df
 claude mcp add kansallisarkisto -- uv run kansallisarkisto-mcp
 ```

@@ -9,25 +9,35 @@ icon: lucide/hard-drive
 - Python 3.14 and [uv](https://docs.astral.sh/uv/)
 - A harvested Sisältöhaku export (see [The Corpora](../how-it-works/data-sources.md))
 
-## Build the table
+## Build the tables
 
 ```bash
 git clone https://github.com/AI-Riksarkivet/kansallisarkisto-mcp
 cd kansallisarkisto-mcp
 make install
+make harvest                                          # df: ~3 s
 make ingest-df
+uv run python scripts/harvest.py --index voudintilit  # ~1 min
+make fetch-astia                                      # ~35 min, resumable
+make ingest-voudintilit
 ```
 
 `make ingest-df` reads `.data/df/df.jsonl.gz` and writes the `df` table into `data/`,
 building a Swedish full-text index over the searchable text and scalar indexes on the
 filtered columns. It takes a couple of seconds for `df`.
 
+`make ingest-voudintilit` does the same for `.data/voudintilit/voudintilit.jsonl.gz`, joined
+with the Astia snapshot `make fetch-astia` writes beside it — each volume's archival reference
+and each page's image link, which the export itself lacks. Without the snapshot the pages
+are still ingested, but carry neither.
+
 Both directories are git-ignored: `.data/` is the 6.3 GB harvest, `data/` is derived from it.
 
-Point the ingest elsewhere if your export lives somewhere else:
+Point an ingest elsewhere if your export lives somewhere else:
 
 ```bash
 uv run python scripts/ingest_df.py --jsonl /path/to/df.jsonl.gz --output /path/to/lancedb
+uv run python scripts/ingest_voudintilit.py --jsonl /path/to/voudintilit.jsonl.gz --astia /path/to/astia.jsonl --output /path/to/lancedb
 ```
 
 ## Run
@@ -58,6 +68,8 @@ docker compose -f .docker/docker-compose.yml up --build
 | variable | default | meaning |
 |---|---|---|
 | `KA_LANCEDB_URI` | *(resolved)* | Where the LanceDB tables live. Unset resolves to `<project root>/data` in a clone and `/data` in the image. Any lancedb URI works, including `s3://` and `gs://`. |
+| `KA_MCP_STAGE_DATASETS` | `false` | Copy the tables onto local disk at boot and serve the copy — for a Hugging Face Space, whose bucket mount lance cannot query under load. See [Deployment](../development/deployment.md#hugging-face-space). |
+| `KA_MCP_STAGE_DIR` | `/data-local` | Where that copy goes. Must be writable by the runtime user. |
 | `KA_MCP_TRANSPORT` | `stdio` | `stdio` or `http`. An unknown value fails loudly rather than silently serving stdio. |
 | `HOST` | `0.0.0.0` | HTTP bind address. |
 | `PORT` | `8000` | HTTP port. |
