@@ -12,7 +12,7 @@
 #
 # Deploy: bump the tag, then
 #   hf upload Riksarkivet/kansallisarkisto-mcp .docker/hf.dockerfile Dockerfile --repo-type space
-FROM riksarkivet/kansallisarkisto-mcp:v0.2.1
+FROM riksarkivet/kansallisarkisto-mcp:v0.3.0
 
 USER root
 RUN mkdir -p /data-local && chown 1000:1000 /data-local
