@@ -46,9 +46,18 @@ def register_df_tools(mcp: FastMCP, get_search) -> None:
             "charters predate 1300, so a thin result for an early century is the archive, not the "
             "query. The text is machine-recognised, so check any quotation against the source. "
             'QUERY SYNTAX: several words means all of them must appear; "quote a phrase" to '
-            "require the exact sequence. Do NOT write AND, OR or NOT — they are not operators "
-            "here and are matched as ordinary words, so 'bref OR littera' also drags in every "
-            "charter containing 'or'. To widen instead, drop a word or pass match_all=false. "
+            "require the exact sequence; a trailing * is a prefix ('lepros*' finds leprosi, "
+            "leprosorum, leprosis) and | lists alternatives ('reval*|reual*' finds either). "
+            "Prefixes are how to search Latin and German, which are not stemmed — only Swedish "
+            "is — and how to catch the spellings of a name. Do NOT write AND, OR or NOT — they "
+            "are not operators here and are matched as ordinary words, so 'bref OR littera' "
+            "also drags in every charter containing 'or'; write 'bref|littera'. To widen "
+            "instead, drop a word or pass match_all=false. "
+            "A PLACE IS TWO DIFFERENT QUESTIONS: issuingplace='Tallinn' finds charters ISSUED "
+            "there, and leaves out the third of the corpus with no recorded place. Charters "
+            "ABOUT a place say its period name in the text, so search that: "
+            "df_search(keyword='lepros* reval*|reual*|revel*|reuel*|reffl*') is what finds the "
+            "leper house at Reval. "
             "Example: df_search(keyword='konung', issuingplace='Åbo', year_min=1300, year_max=1400)."
         ),
     )
@@ -59,8 +68,12 @@ def register_df_tools(mcp: FastMCP, get_search) -> None:
                 description=(
                     "Search term, in the language of the documents (Swedish, Latin, German) and in "
                     "period spelling. Swedish stemming is applied, so 'konung' also matches 'konungen' "
-                    "and 'konungs'; accents are folded, so 'Abo' matches 'Åbo'. Several words require "
-                    'all of them; "quoted words" require that exact phrase. AND/OR/NOT are not '
+                    "and 'konungs'; accents are folded, so 'Abo' matches 'Åbo'. Latin and German are "
+                    "NOT stemmed, so search them by prefix: a trailing * expands to every word form "
+                    "that begins that way ('lepros*' — at least 3 characters before the *, at most "
+                    "300 forms), and | separates alternatives within a term ('bref|breff', "
+                    "'reval*|reual*'). Several words require all of them; "
+                    '"quoted words" require that exact phrase. AND/OR/NOT are not '
                     "operators and will be searched for literally. "
                     "The catalogue fields are indexed alongside the transcript, so the Finnish index-term "
                     "vocabulary also works here even though it has no filter of its own: 'Piispat' "
@@ -97,8 +110,12 @@ def register_df_tools(mcp: FastMCP, get_search) -> None:
                     "realm use their MODERN name: 'Tallinn' (197, NOT Reval), 'Gdansk' (37, NOT "
                     "Danzig), 'Tartu' (5, NOT Dorpat). The historical forms of those match nothing. "
                     "Also 'Rom' (364 — the substring also catches 'Magliano Romano'), 'Avignon' (96), "
-                    "'Uppsala' (88), 'Lübeck' (42). 2,314 charters (34%) record no place and are "
-                    "excluded whenever this is set."
+                    "'Uppsala' (88), 'Lübeck' (42). THIS IS THE PLACE OF ISSUE, NOT THE SUBJECT: "
+                    "2,314 charters (34%) record no place and are excluded whenever this is set, and "
+                    "a charter about Tallinn written in Åbo is not issued at Tallinn. For charters "
+                    "that mention a place, search its period spelling as a keyword prefix instead — "
+                    "Tallinn is 'reval*|reual*|revel*|reuel*|reffl*', Gdansk 'dantz*|dantsk*', Tartu "
+                    "'darpt*|darbt*|dorpt*|tarbat*'."
                 )
             ),
         ] = None,
@@ -129,6 +146,9 @@ def register_df_tools(mcp: FastMCP, get_search) -> None:
                     "fuzzy=1 takes 'bref' to 2,212 and is the right second attempt when a search "
                     "looks thin. It is not the default because a fuzzy term skips stemming, so pass "
                     "a base form ('konung', not 'konungen' — which collapses from 279 hits to 6). "
+                    "It is whole-word edit distance, so it does not reach inflections: 'lepros' with "
+                    "fuzzy=2 misses 'leprosorum' and finds unrelated words instead — use a prefix "
+                    "('lepros*') for that. "
                     'Cannot be combined with a "quoted phrase".'
                 ),
                 ge=0,

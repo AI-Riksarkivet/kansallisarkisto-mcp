@@ -89,18 +89,21 @@ That rule governs the **text**. The `issuingplace` **filter** is a cataloguer's 
 499 values, and it is mixed: Finnish and Swedish places keep their historical Swedish form
 (`Åbo`, `Viborg`, `Nådendal`), but places outside that realm are recorded under their modern
 name — `Tallinn` not `Reval`, `Gdansk` not `Danzig`, `Tartu` not `Dorpat`. The historical
-forms of those three match nothing at all.
+forms of those three match nothing at all. And it is the place of *issue*: a third of the
+corpus records none, so a charter *about* Tallinn is found by searching the text for the
+period name — `reval*|reual*|revel*|reuel*|reffl*` — not by the filter.
 
 ## Tools
 
 - `df_search(keyword, offset=0, limit=25, language?, issuingplace?, country?, year_min?, year_max?, match_all=true, fuzzy=0)`
   — full-text search over the charters. Swedish stemming and accent folding are applied, so
   `konungen` matches `konung` and `Abo` matches `Åbo`. Several words must **all** appear
-  (`match_all=false` matches any of them) and `"quoted words"` are an exact phrase; `AND`, `OR`
-  and `NOT` are not operators and are matched as ordinary words. Spelling was never
-  standardised, so `fuzzy=1` is the right second attempt when a result set looks thin — pass a
-  base form, since a fuzzy term skips stemming. Each hit leads with its **DF number**, the
-  citable identifier. Page with `offset`.
+  (`match_all=false` matches any of them) and `"quoted words"` are an exact phrase; a trailing
+  `*` is a prefix (`lepros*` — Latin and German are not stemmed) and `|` lists alternatives
+  (`bref|breff`). `AND`, `OR` and `NOT` are not operators and are matched as ordinary words.
+  Spelling was never standardised, so `fuzzy=1` is the right second attempt when a result set
+  looks thin — pass a base form, since a fuzzy term skips stemming. Each hit leads with its
+  **DF number**, the citable identifier. Page with `offset`.
 - `df_get_charter(df_number)` — one charter's full transcript and catalogue record.
 
 The catalogue's index term is a controlled vocabulary of 75 values shaped `Issuer,
@@ -119,9 +122,11 @@ For `voudintilit`:
 - `voudintilit_search(keyword, offset=0, limit=25, collection?, account_book?, year_min?, year_max?, match_all=true, fuzzy=0)`
   — full-text search over the bailiff-account pages, in early-modern Swedish. `collection` is
   `hame` or `satakunta`; `account_book` is a substring of the Finnish title (`Sääksmäen`,
-  `Hämeen linnan`, `Maakirja`). Each hit is one page, led by its citation — reference number,
-  account book, year and page, such as **2372 Ylä-Satakunnan tilikirja 1585, p. 16** — and
-  linked to its image in Astia.
+  `Hämeen linnan`, `Maakirja`). `bref|breff` matches either spelling; a prefix `*` is not
+  available here — the corpus is too large for a vocabulary — so list spellings or use
+  `fuzzy=1`. Each hit is one page, led by its citation — reference number, account book, year
+  and page, such as **2372 Ylä-Satakunnan tilikirja 1585, p. 16** — and linked to its image in
+  Astia.
 - `voudintilit_get_page(page_id)` — one page's full text, with the ids of the previous and next
   pages in its volume: accounts run across pages.
 

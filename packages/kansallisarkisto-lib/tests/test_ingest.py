@@ -7,7 +7,7 @@ import pytest
 
 from ra_mcp_kansallisarkisto_lib.ingest import ingest_df
 
-DF_FIXTURE_ROWS = 18
+DF_FIXTURE_ROWS = 19
 
 
 def test_ingest_row_count(df_table):

@@ -20,6 +20,31 @@ __all__ = ["VOUDINTILIT_COLLECTIONS", "DfSearch", "SearchResult", "VoudintilitSe
 # filter-shaped attributes belong here rather than on the query span.
 _tracer = get_tracer("kansallisarkisto.df.operations")
 
+# What the catalogue's modern place names look like in the texts, as keyword
+# prefixes. issuingplace='Tallinn' finds the 197 charters *issued* there; a charter
+# about Tallinn issued elsewhere — or with no recorded place, which is a third of
+# the corpus — says Reval, in one of these spellings. Measured on the corpus
+# vocabulary: 'reval'/'reual' 60/23 documents, 'revele' 102, 'reuel' 93, 'reffle'
+# 38, 'ræffla' 10. 'reuel*' also admits 'reuelatio' — the price of the OCR's u/v.
+PLACE_TEXT_FORMS = {
+    "tallinn": "reval*|reual*|revel*|reuel*|reffl*|ræffl*",
+    "gdansk": "dantz*|dantsk*",
+    "tartu": "darpt*|darbt*|dorpt*|tarbat*",
+}
+
+
+def _issuingplace_note(issuingplace: str) -> str:
+    """Say what a place-of-issue filter leaves out, and how to reach it.
+
+    This is the trap the leper-house charter fell into: DF 173 is *about* Reval,
+    has no recorded place of issue, and no issuingplace='Tallinn' search can ever
+    return it. The filter is right to be narrow; the note is what stops narrow
+    from reading as complete.
+    """
+    forms = next((forms for name, forms in PLACE_TEXT_FORMS.items() if name in issuingplace.lower()), None)
+    how = f"keyword='{forms}' (add the topic as another word)" if forms else "its period spelling as a keyword, with a trailing * to catch variant endings"
+    return f"issuingplace='{issuingplace}' matches the recorded place of ISSUE only: charters with no recorded place (a third of the corpus) and charters about the place issued elsewhere are left out. To find charters that mention it, search {how}."
+
 
 class DfSearch:
     """Full-text search and charter lookup over the ``df`` table."""
@@ -54,7 +79,10 @@ class DfSearch:
 
         Args:
             keyword: Search term (required, non-empty). Use period spelling —
-                ``bref`` not ``brev``, ``Åbo`` not ``Turku``.
+                ``bref`` not ``brev``, ``Åbo`` not ``Turku``. A trailing ``*``
+                is a prefix (``lepros*`` finds ``leprosi`` and ``leprosorum``,
+                which no stemmer here would) and ``|`` lists alternatives
+                (``reval*|reual*``).
             limit: Maximum number of results to return.
             offset: Number of results to skip (for pagination).
             language: Exact language label, in unaccented Finnish (``ruotsi``,
@@ -102,7 +130,10 @@ class DfSearch:
                 at_least("year_to", year_min) if year_min is not None else None,
                 at_most("year_from", year_max) if year_max is not None else None,
             )
-            return lancedb_fts_search(self._db, self._table_name, keyword, limit=limit, offset=offset, where=where, match_all=match_all, fuzzy=fuzzy)
+            result = lancedb_fts_search(self._db, self._table_name, keyword, limit=limit, offset=offset, where=where, match_all=match_all, fuzzy=fuzzy)
+            if issuingplace:
+                result.notes.append(_issuingplace_note(issuingplace))
+            return result
 
     def get_charter(self, df_number: str | int) -> dict[str, Any] | None:
         """Return one charter by its DF number, or ``None`` if there is no such charter.

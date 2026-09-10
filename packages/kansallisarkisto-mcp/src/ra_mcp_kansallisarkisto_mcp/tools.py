@@ -48,7 +48,10 @@ kansallisarkisto_mcp: FastMCP = FastMCP(
         "documents issued at Åbo. "
         'Several words in a keyword must all appear, and a "quoted phrase" must appear exactly. '
         "AND, OR and NOT are not operators — they are searched for as ordinary words — so widen by "
-        "removing a word or passing match_all=false, never by writing OR. "
+        "removing a word, writing alternatives as 'bref|breff', or passing match_all=false, never "
+        "by writing OR. A trailing * is a prefix on the charters ('lepros*', which reaches the "
+        "Latin and German the stemmer does not); the two page corpora are too large for one, so "
+        "list spellings there, or use fuzzy=1. "
         "Spelling was never standardised, and that is the usual reason a search looks empty: "
         "'bref' and 'breff' are the same word yet share only 71 of their 2,104 charters. When a "
         "result set looks thin, retry with fuzzy=1 on a base form before concluding the archive "

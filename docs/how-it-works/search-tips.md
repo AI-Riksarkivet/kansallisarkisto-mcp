@@ -69,6 +69,39 @@ A fuzzy term skips the analysis pipeline, so it is matched raw against stemmed i
 default, and when a search looks thin the right second attempt is `fuzzy=1` **on a base
 form** — `konung`, not `konungen`.
 
+## Latin and German are not stemmed — use a prefix
+
+The stemmer is Swedish, so `ecclesia`, `ecclesie` and `ecclesiam` are three unrelated tokens,
+and `fuzzy` does not bridge them: it is whole-word edit distance, and `lepros` is four edits
+from `leprosorum`. On the full corpus `lepros` with `fuzzy=2` returned 19 charters, none of
+them the one about the leper house at Reval, and most of them noise.
+
+A trailing `*` is a prefix, expanded against the corpus's own vocabulary: `lepros*` matches
+`leprosi` and `leprosorum` and finds all three leprosy charters. It needs at least 3
+characters and expands to the 300 most frequent forms (`kon*` begins 347, and a capped search
+says so). `|` lists alternatives within a term — `bref|breff`, or `reval*|reual*|revel*` —
+which is what to write instead of `OR`.
+
+## A place is two different questions
+
+`issuingplace="Tallinn"` finds the 197 charters **issued** at Tallinn. It does not find the
+ones **about** Tallinn: a charter issued elsewhere is issued elsewhere, and 2,314 charters —
+a third of the corpus — record no place at all and are excluded by any place filter. DF 173,
+the Reval chapter's 1279 appeal for its leper house, is one of those; no keyword can reach it
+through the filter.
+
+The text says the period name, so search that, as a prefix, with the topic as another word:
+
+```
+df_search(keyword="lepros* reval*|reual*|revel*|reuel*|reffl*")
+```
+
+Measured on the corpus, Tallinn appears as `revele` (102 charters), `reuel` (93), `revel`
+(77), `revall` (69), `reval` (60), `reuall` (59), `reffle` (38), `reualie` (22), `ræffla`
+(10) and a dozen rarer forms. Gdansk is `dantz*|dantsk*`, Tartu `darpt*|darbt*|dorpt*|tarbat*`.
+A filtered search ends with a note that says all this, so a narrow result does not read as a
+complete one.
+
 ## The DF number is searchable
 
 `DF 1451` — or just `1451` — finds that charter. This is also what makes the four charters

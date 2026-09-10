@@ -12,13 +12,15 @@ out: this server, like ape-mcp, has no telemetry stack.
 from __future__ import annotations
 
 import logging
+import re
 import threading
 import time
+import unicodedata
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any
 
 from lancedb.index import FTS, Bitmap, BTree
-from lancedb.query import FullTextOperator, MatchQuery
+from lancedb.query import BooleanQuery, FullTextOperator, FullTextQuery, MatchQuery, Occur
 from opentelemetry.trace import SpanKind, StatusCode
 from pydantic import BaseModel
 
@@ -102,6 +104,10 @@ class SearchResult(BaseModel):
     # rather than the real total. Never true for df (6,876 rows); routine for
     # tuomiokirjat (7.8M), which is why it is on the shared envelope.
     total_is_capped: bool = False
+    # Things the caller should know about how the search was run — a prefix that
+    # was truncated to its most frequent forms, a filter that leaves out part of
+    # the corpus. Rendered after the results, never instead of them.
+    notes: list[str] = []
 
 
 def get_lancedb(uri: str) -> lancedb.DBConnection:
@@ -223,6 +229,146 @@ def build_scalar_indexes(
     return table
 
 
+# --- prefix search --------------------------------------------------------------
+# The engine has no wildcard: "lepros*" matches nothing. And its stemmer is
+# Swedish, so the Latin and German that make up 42% of df are never stemmed —
+# "leprosorum", "leprosi" and "leprosis" are three unrelated tokens. Fuzzy
+# matching does not bridge them either: it is whole-word edit distance, and
+# "lepros" is four edits from "leprosorum". That is how the one charter about
+# the leper house at Reval (DF 173) stayed invisible to every obvious query.
+#
+# So a trailing * is expanded here, against the table's own vocabulary, into an
+# OR of every form that begins that way; "a|b" in a term does the same for
+# spellings the caller lists. The vocabulary is built on first use from the
+# indexed text and cached for the process. It is bounded by row count because a
+# corpus of millions of OCR pages cannot hold one in memory — voudintilit alone
+# has 1.15M distinct forms and takes 13 s to tokenise, df 140K forms in 0.8 s.
+
+PREFIX_MIN_CHARS = 3
+# An expansion is an OR of this many match clauses; 500 ran in 90 ms on df, so
+# the cap is about keeping "kon*" (347 forms) meaningful, not about speed. A
+# search that hits it says so in a note.
+MAX_PREFIX_EXPANSIONS = 300
+MAX_VOCABULARY_ROWS = 50_000
+
+_PREFIX_TERM = re.compile(rf"^(\w{{{PREFIX_MIN_CHARS},}})\*$")
+_TOKEN = re.compile(r"\w+")
+_vocabularies: dict[tuple[str, str, str], dict[str, int]] = {}
+_vocabularies_lock = threading.Lock()
+
+
+def fold_token(text: str) -> str:
+    """Lower-case and strip accents the way the index's ASCII folding does, so a
+    prefix typed as ``Åbo`` meets the vocabulary's ``abo`` and ``ræffl`` its
+    ``raeffl``."""
+    text = text.lower().replace("æ", "ae").replace("ø", "o").replace("ß", "ss")
+    return "".join(c for c in unicodedata.normalize("NFKD", text) if not unicodedata.combining(c))
+
+
+def vocabulary(db: lancedb.DBConnection, table_name: str, fts_column: str = FTS_COLUMN) -> dict[str, int]:
+    """The distinct folded word forms of ``table_name.fts_column`` and how many
+    rows each occurs in, built once per process (thread-safe lazy init).
+
+    Raises:
+        SearchInputError: when the table is too large to hold a vocabulary; the
+            message tells the caller what to do instead.
+    """
+    key = (str(db.uri), table_name, fts_column)
+    vocab = _vocabularies.get(key)
+    if vocab is None:
+        with _vocabularies_lock:
+            vocab = _vocabularies.get(key)
+            if vocab is None:
+                vocab = _build_vocabulary(db, table_name, fts_column)
+                _vocabularies[key] = vocab
+    return vocab
+
+
+def _build_vocabulary(db: lancedb.DBConnection, table_name: str, fts_column: str) -> dict[str, int]:
+    table = db.open_table(table_name)
+    rows = table.count_rows()
+    if rows > MAX_VOCABULARY_ROWS:
+        raise SearchInputError(
+            f"prefix search (a trailing *) is not available on this corpus: {rows:,} rows is too many to hold a vocabulary. Search whole words instead, listing spellings as alternatives ('bref|breff') or with fuzzy=1."
+        )
+    counts: dict[str, int] = {}
+    if rows == 0:
+        return counts
+    with _tracer.start_as_current_span(f"vocabulary {table_name}", kind=SpanKind.CLIENT, attributes={"db.system": "lancedb", "db.collection.name": table_name, "db.operation.name": "scan"}) as span:
+        for row in table.search().select([fts_column]).limit(rows).to_list():
+            for token in set(_TOKEN.findall(fold_token(row[fts_column] or ""))):
+                counts[token] = counts.get(token, 0) + 1
+        span.set_attribute("db.response.returned_rows", rows)
+        span.set_attribute("kansallisarkisto.vocabulary.size", len(counts))
+    return counts
+
+
+def expand_prefix(vocab: dict[str, int], prefix: str) -> tuple[list[str], int]:
+    """The forms in ``vocab`` beginning with ``prefix``, most frequent first and
+    capped at :data:`MAX_PREFIX_EXPANSIONS`, plus how many there were in all."""
+    needle = fold_token(prefix)
+    forms = sorted(((count, form) for form, count in vocab.items() if form.startswith(needle)), key=lambda item: (-item[0], item[1]))
+    return [form for _, form in forms[:MAX_PREFIX_EXPANSIONS]], len(forms)
+
+
+def _needs_expansion(keyword: str) -> bool:
+    return "*" in keyword or "|" in keyword
+
+
+def _expanded_query(
+    db: lancedb.DBConnection,
+    table_name: str,
+    keyword: str,
+    *,
+    fts_column: str,
+    match_all: bool,
+    fuzzy: int,
+    notes: list[str],
+) -> FullTextQuery | None:
+    """Build the boolean query for a keyword that uses ``*`` or ``|``.
+
+    Each whitespace-separated term becomes one clause — MUST under ``match_all``,
+    SHOULD otherwise — and within a term, ``|``-separated alternatives and the
+    expansions of a ``prefix*`` are ORed. Plain alternatives keep the caller's
+    ``fuzzy``; expanded forms are exact, since they came from the index itself.
+
+    Returns ``None`` when nothing could match: a required prefix that begins no
+    word in the corpus, or a keyword that was only punctuation.
+    """
+    occur = Occur.MUST if match_all else Occur.SHOULD
+    clauses: list[tuple[Occur, FullTextQuery]] = []
+    for term in keyword.split():
+        # A bare "*" or "|" is punctuation, not a term; it must not raise, because
+        # the keyword comes from a model and will eventually contain either alone.
+        alternatives = [alt for alt in term.split("|") if alt and alt != "*"]
+        if not alternatives:
+            continue
+        queries: list[FullTextQuery] = []
+        for alt in alternatives:
+            if alt.endswith("*"):
+                matched = _PREFIX_TERM.match(alt)
+                if matched is None:
+                    raise SearchInputError(f"'{alt}': a prefix needs at least {PREFIX_MIN_CHARS} characters before the *")
+                stem = matched.group(1)
+                forms, available = expand_prefix(vocabulary(db, table_name, fts_column), stem)
+                if not forms:
+                    notes.append(f"No word in this corpus begins with '{stem}'.")
+                elif available > len(forms):
+                    notes.append(f"'{alt}' begins {available:,} distinct forms in this corpus; only the {len(forms)} most frequent were searched. Lengthen the prefix to narrow it.")
+                queries.extend(MatchQuery(form, column=fts_column) for form in forms)
+            elif "*" in alt:
+                raise SearchInputError(f"'{alt}': * is only supported at the end of a term, as in 'lepros*'")
+            else:
+                queries.append(MatchQuery(alt, column=fts_column, fuzziness=fuzzy))
+        if not queries:
+            if match_all:
+                return None
+            continue
+        clause = queries[0] if len(queries) == 1 else BooleanQuery([(Occur.SHOULD, query) for query in queries])
+        clauses.append((occur, clause))
+    return BooleanQuery(clauses) if clauses else None
+
+
 def lancedb_fts_search(
     db: lancedb.DBConnection,
     table_name: str,
@@ -288,6 +434,7 @@ def lancedb_fts_search(
         raise SearchInputError(f"limit must be >= 1 (got {limit})")
 
     table = db.open_table(table_name)
+    notes: list[str] = []
     # A quoted keyword goes to the query parser, which is what understands phrase
     # syntax; MatchQuery would match the quote characters themselves and silently
     # turn '"de ecclesia"' from 8 hits into 496. Everything else goes through
@@ -300,6 +447,13 @@ def lancedb_fts_search(
         if fuzzy:
             raise SearchInputError(f"fuzzy={fuzzy} cannot be combined with a quoted phrase; drop the quotes to search the words fuzzily, or use fuzzy=0 for the exact phrase")
         request: Any = keyword
+    elif _needs_expansion(keyword):
+        request = _expanded_query(db, table_name, keyword, fts_column=FTS_COLUMN, match_all=match_all, fuzzy=fuzzy, notes=notes)
+        if request is None:
+            # Nothing in the corpus can satisfy this — an ordinary empty answer,
+            # and one worth counting as such.
+            _results_histogram.record(0, {"db.system": "lancedb", "db.collection.name": table_name})
+            return SearchResult(records=[], total_hits=0, keyword=keyword, offset=offset, limit=limit, notes=notes)
     else:
         operator = FullTextOperator.AND if match_all else FullTextOperator.OR
         request = MatchQuery(keyword, column=FTS_COLUMN, operator=operator, fuzziness=fuzzy)
@@ -349,6 +503,7 @@ def lancedb_fts_search(
         offset=offset,
         limit=limit,
         total_is_capped=total >= MAX_TOTAL_COUNT,
+        notes=notes,
     )
 
 
@@ -460,10 +615,13 @@ def format_results(
     # "10000 records" for a search that actually matched far more.
     total = f"{result.total_hits}+" if result.total_is_capped else str(result.total_hits)
 
+    notes = [f"Note: {note}" for note in result.notes]
     if not result.records:
         if result.offset > 0:
-            return f"No more {label} results for '{result.keyword}' at offset {result.offset}. Total found: {total}"
-        return f"No {label} results found for '{result.keyword}'."
+            message = f"No more {label} results for '{result.keyword}' at offset {result.offset}. Total found: {total}"
+        else:
+            message = f"No {label} results found for '{result.keyword}'."
+        return "\n".join([message, *notes])
 
     lines: list[str] = [
         f"{label} search results for '{result.keyword}': showing {len(result.records)} of {total} records (offset {result.offset})",
@@ -475,5 +633,6 @@ def format_results(
     next_offset = result.offset + result.limit
     if next_offset < result.total_hits:
         lines.append(f"More results available. Use offset={next_offset} to see the next page.")
+    lines.extend(notes)
 
     return "\n".join(lines)

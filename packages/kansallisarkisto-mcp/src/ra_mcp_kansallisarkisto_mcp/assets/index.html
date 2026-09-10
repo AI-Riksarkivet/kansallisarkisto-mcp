@@ -136,6 +136,7 @@ claude mcp add kansallisarkisto -- uv run kansallisarkisto-mcp</code></pre>
         <li><strong>The text is not in Finnish.</strong> Finland was part of the Swedish realm until 1809, so these documents are early-modern Swedish, Latin and German. Only the catalogue metadata is Finnish.</li>
         <li>Search in period spelling: <code>bref</code> not <code>brev</code>, <code>konung</code> not <code>kung</code>, <code>&Aring;bo</code> not <code>Turku</code>, <code>Viborg</code> not <code>Viipuri</code>.</li>
         <li>Swedish stemming and accent folding are applied &mdash; <code>konungen</code> finds <code>konung</code>, <code>Abo</code> finds <code>&Aring;bo</code>.</li>
+        <li>Several words must all appear; <code>"quoted words"</code> are an exact phrase; <code>bref|breff</code> matches either spelling. On the charters a trailing <code>*</code> is a prefix &mdash; <code>lepros*</code> reaches the Latin and German the stemmer does not &mdash; while the two page corpora are too large for one, so list spellings or use <code>fuzzy=1</code>.</li>
         <li>Language labels are unaccented Finnish: <code>venaja</code>, never <code>ven&auml;j&auml;</code>.</li>
         <li>36% of the charters are catalogued but never transcribed. They are still returned &mdash; findable by place, index term and language &mdash; and marked as untranscribed.</li>
         <li>Transcripts are OCR/HTR output over a millennium of handwriting. Check any quotation against the archive.</li>

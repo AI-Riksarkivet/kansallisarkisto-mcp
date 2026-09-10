@@ -212,3 +212,41 @@ async def test_voudintilit_missing_table_is_reported_as_text(monkeypatch, tmp_pa
     monkeypatch.setattr(tools.settings, "ka_lancedb_uri", str(tmp_path / "empty"))
     out = await call("voudintilit_search", {"keyword": "konung"})
     assert "voudintilit table is not available" in out
+
+
+async def test_a_prefix_reaches_a_charter_no_stem_or_fuzzy_could(df_search):
+    """DF 173 says 'leprosorum' and 'Reualie', has no recorded place, and was
+    invisible to 'lepros' at any fuzziness and to issuingplace='Tallinn'."""
+    tools._search = df_search
+    out = await call("df_search", {"keyword": "lepros* reval*|reual*|revel*|reuel*|reffl*"})
+    assert "**DF 173**" in out
+    assert "showing 1 of 1" in out
+
+
+async def test_a_place_filter_reports_what_it_leaves_out_even_when_empty(df_search):
+    tools._search = df_search
+    out = await call("df_search", {"keyword": "leprosorum", "issuingplace": "Tallinn"})
+    assert out.startswith("No Diplomatarium Fennicum results found")
+    assert "Note: issuingplace='Tallinn' matches the recorded place of ISSUE only" in out
+    assert "reval*|reual*" in out
+
+
+async def test_a_bad_prefix_is_an_actionable_message_not_a_crash(df_search):
+    tools._search = df_search
+    out = await call("df_search", {"keyword": "ab*"})
+    assert out.startswith("Error: 'ab*': a prefix needs at least 3 characters")
+
+
+async def test_prefix_search_and_the_place_trap_are_in_the_tool_description():
+    """The description is the only place a model learns either; nothing else
+    tests prose."""
+    async with Client(tools.kansallisarkisto_mcp) as client:
+        df_search = next(t for t in await client.list_tools() if t.name == "df_search")
+    assert "lepros*" in df_search.description
+    assert "ISSUED" in df_search.description
+    schema = json.dumps(df_search.inputSchema)
+    assert "trailing *" in schema
+    assert "reval*|reual*" in schema
+
+
+# --- voudintilit ----------------------------------------------------------------

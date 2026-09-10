@@ -9,10 +9,10 @@ from ra_mcp_kansallisarkisto_lib.ingest import ingest_df
 from ra_mcp_kansallisarkisto_lib.search_operations import DfSearch
 
 FIXTURES = Path(__file__).parent / "fixtures"
-# 18 real Diplomatarium Fennicum records, chosen to cover the traps the corpus
+# 19 real Diplomatarium Fennicum records, chosen to cover the traps the corpus
 # README documents: untranscribed charters, unknown years (0), unlocated places
 # (null coordinates), open-ended and closed dating intervals, and all four main
-# languages.
+# languages — and DF 173, a charter about Reval with no recorded place of issue.
 DF_FIXTURE = FIXTURES / "df_sample.jsonl"
 # 12 real voudintilit pages from 6 volumes: both collections, both sides of a page
 # gap (1576091152 has no page 2), neighbouring pages (1578628789 p. 15–17, 1570685252

@@ -146,7 +146,7 @@ def test_no_record_is_left_without_indexable_text(df_fixture_records):
     assert all(DfRecord.from_json(raw).searchable_text.strip() for raw in df_fixture_records)
 
 
-@pytest.mark.parametrize("query", ['"unclosed phrase', "konung]", "konung\\", "!!!", "*", "konung^2", "  konung  "])
+@pytest.mark.parametrize("query", ['"unclosed phrase', "konung]", "konung\\", "!!!", "*", "|", "konung|", "konung^2", "  konung  "])
 def test_awkward_queries_do_not_raise(search, query):
     """The keyword arrives from a model, so it will eventually contain quotes,
     brackets and operators. None of them may reach the caller as an exception."""
@@ -229,3 +229,82 @@ def test_fuzzy_widens_to_spelling_variants(search):
     exact = search.search("kirkia", fuzzy=0).total_hits
     widened = search.search("kirkia", fuzzy=1).total_hits
     assert widened >= exact
+
+
+# --- a prefix, for the languages the stemmer does not cover ------------------
+# The stemmer is Swedish, so Latin and German inflections are unrelated tokens
+# and fuzzy matching (whole-word edit distance) does not bridge them either.
+# DF 173 — the leper house at Reval, 1279 — was unreachable by every obvious
+# query for exactly that reason, and by the place filter for another: it has
+# no recorded place of issue.
+
+
+def test_a_prefix_reaches_the_latin_inflections_the_stemmer_does_not(search):
+    """'ecclesia', 'ecclesie' and 'ecclesiam' are three tokens to a Swedish stemmer."""
+    forms = {form: {r["df"] for r in search.search(form, limit=100).records} for form in ("ecclesia", "ecclesie", "ecclesiam")}
+    assert all(forms.values()), "fixture no longer covers the inflections this guards"
+    prefixed = {r["df"] for r in search.search("eccles*", limit=100).records}
+    union = set().union(*forms.values())
+    assert prefixed == union
+    assert any(prefixed > hits for hits in forms.values()), "every form co-occurs, so the prefix proves nothing"
+
+
+def test_fuzzy_does_not_reach_an_inflection_but_a_prefix_does(search):
+    """'lepros' is four edits from 'leprosorum'; fuzzy=2 finds unrelated words instead."""
+    fuzzy = {r["df"] for r in search.search("lepros", fuzzy=2, limit=100).records}
+    prefixed = {r["df"] for r in search.search("lepros*", limit=100).records}
+    assert "173" not in fuzzy
+    assert "173" in prefixed
+
+
+def test_the_charter_about_reval_is_beyond_the_place_filter_but_not_the_text(search):
+    """The place filter is the place of ISSUE; a charter about a place, issued
+    elsewhere or nowhere recorded, says the place's period name in its text."""
+    filtered = search.search("leprosorum", issuingplace="Tallinn")
+    assert filtered.total_hits == 0
+    assert any("reval*" in note for note in filtered.notes), filtered.notes
+    assert [r["df"] for r in search.search("lepros* reval*|reual*|revel*|reuel*|reffl*").records] == ["173"]
+
+
+def test_alternatives_are_or_within_a_term_and_and_across_terms(search):
+    either = search.search("Perugia|Lateranen", limit=100)
+    assert either.total_hits == search.search("Perugia Lateranen", match_all=False, limit=100).total_hits
+    both = {r["df"] for r in search.search("Perugia|Lateranen latina", limit=100).records}
+    assert both
+    assert both <= {r["df"] for r in search.search("latina", limit=100).records}
+
+
+@pytest.mark.parametrize("keyword", ["ab*", "re*al", "konung ab*"])
+def test_a_short_or_misplaced_prefix_is_a_caller_error(search, keyword):
+    """Silently matching nothing is the failure the prefix exists to remove."""
+    from ra_mcp_kansallisarkisto_lib.dataset import SearchInputError
+
+    with pytest.raises(SearchInputError, match=r"\*"):
+        search.search(keyword)
+
+
+def test_a_prefix_that_begins_nothing_says_so(search):
+    result = search.search("zzzq*")
+    assert result.total_hits == 0
+    assert result.notes == ["No word in this corpus begins with 'zzzq'."]
+
+
+def test_a_capped_expansion_says_so(search, monkeypatch):
+    """The most frequent forms are searched and the cap is reported, so a short
+    prefix reads as 'lengthen this', not as the whole answer."""
+    from ra_mcp_kansallisarkisto_lib import dataset
+
+    monkeypatch.setattr(dataset, "MAX_PREFIX_EXPANSIONS", 1)
+    result = search.search("eccles*", limit=100)
+    assert result.records
+    assert any("most frequent" in note for note in result.notes), result.notes
+
+
+def test_prefix_search_is_refused_on_a_corpus_too_large_for_a_vocabulary(search, monkeypatch):
+    """voudintilit's 98,945 pages hold 1.15M distinct forms and take 13 s to
+    tokenise — not something to do inside a request."""
+    from ra_mcp_kansallisarkisto_lib import dataset
+
+    monkeypatch.setattr(dataset, "MAX_VOCABULARY_ROWS", 1)
+    with pytest.raises(dataset.SearchInputError, match="not available"):
+        search.search("eccles*")

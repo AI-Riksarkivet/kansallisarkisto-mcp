@@ -54,8 +54,11 @@ def register_voudintilit_tools(mcp: FastMCP, get_search) -> None:
                 description=(
                     "Search term, in early-modern Swedish and period spelling. Swedish stemming and "
                     'accent folding are applied. Several words require all of them; "quoted words" '
-                    "require that exact phrase. The account-book title and collection are indexed "
-                    "with the page text, so a title word such as 'Maakirja' (land register) works here too."
+                    "require that exact phrase; 'bref|breff' matches either spelling. A trailing * "
+                    "(prefix search) is not available on this corpus — it is too large to hold a "
+                    "vocabulary — so list the spellings, or use fuzzy=1. The account-book title and "
+                    "collection are indexed with the page text, so a title word such as 'Maakirja' "
+                    "(land register) works here too."
                 )
             ),
         ],

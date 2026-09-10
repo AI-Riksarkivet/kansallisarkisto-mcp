@@ -12,7 +12,7 @@ crown's bailiff accounts for the Häme and Satakunta bailiwicks, 1539–1635. Ea
 
 | parameter | type | default | notes |
 |---|---|---|---|
-| `keyword` | string | *(required)* | Search term in early-modern Swedish and period spelling. Swedish stemming and accent folding apply. Several words require **all** of them; `"quoted words"` require that exact phrase. The account-book title and collection are indexed with the page text. |
+| `keyword` | string | *(required)* | Search term in early-modern Swedish and period spelling. Swedish stemming and accent folding apply. Several words require **all** of them; `"quoted words"` require that exact phrase; `bref\|breff` matches either spelling. A trailing `*` is not available here — the corpus is too large for a vocabulary — so list spellings, or use `fuzzy`. The account-book title and collection are indexed with the page text. |
 | `offset` | int ≥ 0 | `0` | Pagination start. |
 | `limit` | int 1–100 | `25` | Results per page. |
 | `collection` | `hame` \| `satakunta` | — | *Hämeen voutikuntien tilejä* (54,560 pages) or *Satakunnan voutikuntien tilejä* (44,385). |

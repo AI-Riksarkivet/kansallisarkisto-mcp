@@ -268,3 +268,16 @@ def test_voudintilit_get_page_returns_the_same_shape_as_a_search_hit(voudintilit
     hit = voudintilit_search.search("konung", limit=1).records[0]
     page = voudintilit_search.get_page(hit["page_id"])
     assert set(page) - {"_score", "_rowid", "previous_page_id", "next_page_id"} == set(hit) - {"_score", "_rowid"}
+
+
+def test_issuingplace_filter_says_what_it_leaves_out(search):
+    """A third of the corpus records no place; a filtered search must not read as
+    complete. For the catalogue's modern names the note gives the period forms."""
+    assert search.search("Åbo", limit=1).notes == []
+    tallinn = search.search("Åbo", limit=1, issuingplace="Tallinn").notes
+    assert len(tallinn) == 1
+    assert "place of ISSUE" in tallinn[0]
+    assert "reval*|reual*" in tallinn[0]
+    generic = search.search("Åbo", limit=1, issuingplace="Åbo").notes
+    assert len(generic) == 1
+    assert "trailing *" in generic[0]

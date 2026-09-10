@@ -224,3 +224,16 @@ def test_no_page_field_can_add_a_line_to_the_block(field):
     control = len(format_voudintilit_results(results(page(**{field: "ab"}))).splitlines())
     hostile = len(format_voudintilit_results(results(page(**{field: "a\nb"}))).splitlines())
     assert hostile == control
+
+
+def test_notes_follow_the_results_and_survive_an_empty_result():
+    """A note is advice about how the search was run — a capped prefix, a filter
+    that leaves out a third of the corpus. It has to reach the reader whether or
+    not anything matched, and never displace the results themselves."""
+    with_hits = results(charter())
+    with_hits.notes = ["issuingplace='Tallinn' matches the recorded place of ISSUE only."]
+    out = format_search_results(with_hits)
+    assert out.index("**DF 526**") < out.index("Note: issuingplace='Tallinn' matches")
+    empty = results()
+    empty.notes = ["No word in this corpus begins with 'zzzq'."]
+    assert format_search_results(empty) == "No Diplomatarium Fennicum results found for 'konung'.\nNote: No word in this corpus begins with 'zzzq'."
