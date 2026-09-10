@@ -6,24 +6,26 @@ import threading
 
 from fastmcp import FastMCP
 
-from ra_mcp_kansallisarkisto_lib.config import DF_TABLE, VOUDINTILIT_TABLE
+from ra_mcp_kansallisarkisto_lib.config import DF_TABLE, TUOMIOKIRJAT_TABLE, VOUDINTILIT_TABLE
 from ra_mcp_kansallisarkisto_lib.dataset import get_lancedb, table_names
-from ra_mcp_kansallisarkisto_lib.search_operations import DfSearch, VoudintilitSearch
+from ra_mcp_kansallisarkisto_lib.search_operations import DfSearch, TuomiokirjatSearch, VoudintilitSearch
 from ra_mcp_kansallisarkisto_mcp.df_tool import register_df_tools
-from ra_mcp_kansallisarkisto_mcp.errors import MISSING_TABLE, MISSING_VOUDINTILIT_TABLE, MissingTableError
+from ra_mcp_kansallisarkisto_mcp.errors import MISSING_TABLE, MISSING_TUOMIOKIRJAT_TABLE, MISSING_VOUDINTILIT_TABLE, MissingTableError
 from ra_mcp_kansallisarkisto_mcp.routes import register_routes
 from ra_mcp_kansallisarkisto_mcp.settings import settings
+from ra_mcp_kansallisarkisto_mcp.tuomiokirjat_tool import register_tuomiokirjat_tools
 from ra_mcp_kansallisarkisto_mcp.voudintilit_tool import register_voudintilit_tools
 
 kansallisarkisto_mcp: FastMCP = FastMCP(
     name="ra-kansallisarkisto-mcp",
     instructions=(
         "Full-text search over the Kansallisarkisto (National Archives of Finland) Sisältöhaku "
-        "corpora — machine-transcribed archival text. Two corpora are served: Diplomatarium "
+        "corpora — machine-transcribed archival text. Three corpora are served: Diplomatarium "
         "Fennicum (`df`), 6,876 medieval charters concerning Finland, 859–1530, through "
-        "`df_search` and `df_get_charter`; and voudintilit, 98,945 pages of the Swedish crown's "
+        "`df_search` and `df_get_charter`; voudintilit, 98,945 pages of the Swedish crown's "
         "bailiff accounts for Häme and Satakunta, 1539–1635, through `voudintilit_search` and "
-        "`voudintilit_get_page`. "
+        "`voudintilit_get_page`; and tuomiokirjat, 7.8 million pages of Finnish lower-court "
+        "records, 1610–1931, through `tuomiokirjat_search` and `tuomiokirjat_get_page`. "
         "THE TEXT IS NOT IN FINNISH. Finland was part of the Swedish realm until 1809, and these "
         "documents are in early-modern Swedish, Latin and German. Search in the source language "
         "and in period spelling — 'bref' not 'brev', 'konung' not 'kung', 'Åbo' not 'Turku'. Only "
@@ -80,7 +82,18 @@ kansallisarkisto_mcp: FastMCP = FastMCP(
         "— reference number, account book, year and page, e.g. '2372 Ylä-Satakunnan tilikirja "
         "1585, p. 16' — and give the user its Astia link, which opens the page image in "
         "Kansallisarkisto's digital archive. Pass the page id to `voudintilit_get_page` for the "
-        "full text and the ids of the previous and next pages: accounts continue across pages."
+        "full text and the ids of the previous and next pages: accounts continue across pages. "
+        "TUOMIOKIRJAT is paged too: each hit is one page of a court volume, and a case runs "
+        "across pages. The courts wrote Swedish until the late 19th century; only the archive and "
+        "series names are Finnish. Narrow `tuomiokirjat_search` with collection (the archive — "
+        "a court's or district's name, e.g. 'Turun raastuvanoikeuden', 'Etelä-Pohjanmaan'), series "
+        "(a town court's name for the 17th–18th centuries, the record type — 'Varsinaisten "
+        "asioiden pöytäkirjat' for cases, 'Ilmoitusasioiden pöytäkirjat' for registrations — for "
+        "the 19th–20th) and a year range; common words match more than 10,000 pages, so narrow "
+        "before paging. Cite a page as each hit leads — series, signum, year and page, e.g. "
+        "'Porin raastuvanoikeuden tuomiokirjat a:1 1622–1639, p. 66' — with the archive named "
+        "beneath it, and give the user its Astia link. Pass the page id to "
+        "`tuomiokirjat_get_page` for the full text and the neighbouring pages."
     ),
 )
 
@@ -127,6 +140,23 @@ def get_voudintilit_search() -> VoudintilitSearch:
     return _voudintilit_search
 
 
+_tuomiokirjat_search: TuomiokirjatSearch | None = None
+_tuomiokirjat_lock = threading.Lock()
+
+
+def get_tuomiokirjat_search() -> TuomiokirjatSearch:
+    """Return the process-wide TuomiokirjatSearch — built lazily, as the others are."""
+    global _tuomiokirjat_search
+    if _tuomiokirjat_search is None:
+        with _tuomiokirjat_lock:
+            if _tuomiokirjat_search is None:
+                db = get_lancedb(settings.lancedb_uri)
+                if TUOMIOKIRJAT_TABLE not in table_names(db):
+                    raise MissingTableError(MISSING_TUOMIOKIRJAT_TABLE)
+                _tuomiokirjat_search = TuomiokirjatSearch(db)
+    return _tuomiokirjat_search
+
+
 def readiness() -> tuple[bool, str]:
     """Whether the server can answer a search on every corpus, for the /ready probe.
 
@@ -141,13 +171,15 @@ def readiness() -> tuple[bool, str]:
     try:
         get_search()
         get_voudintilit_search()
+        get_tuomiokirjat_search()
     except MissingTableError as exc:
         return False, str(exc)
     except Exception as exc:  # noqa: BLE001 - a probe must answer, not raise
         return False, f"{type(exc).__name__}: {exc}"
-    return True, f"{DF_TABLE}, {VOUDINTILIT_TABLE}"
+    return True, f"{DF_TABLE}, {VOUDINTILIT_TABLE}, {TUOMIOKIRJAT_TABLE}"
 
 
 register_df_tools(kansallisarkisto_mcp, get_search)
 register_voudintilit_tools(kansallisarkisto_mcp, get_voudintilit_search)
+register_tuomiokirjat_tools(kansallisarkisto_mcp, get_tuomiokirjat_search)
 register_routes(kansallisarkisto_mcp, readiness)

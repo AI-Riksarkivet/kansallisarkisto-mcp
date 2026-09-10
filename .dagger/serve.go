@@ -15,10 +15,10 @@ func healthCheckCmd(host string, port int) []string {
 	)}
 }
 
-// fixtureData ingests the test fixtures — 18 df charters, and 12 voudintilit pages
-// with their Astia snapshot — into one LanceDB database and returns it as a
-// directory, so the image can be exercised against real tables without shipping
-// (or harvesting) the corpora.
+// fixtureData ingests the test fixtures — 18 df charters, 12 voudintilit pages and
+// 18 tuomiokirjat pages, each with its Astia snapshot — into one LanceDB database
+// and returns it as a directory, so the image can be exercised against real tables
+// without shipping (or harvesting) the corpora.
 func (m *KansallisarkistoMcp) fixtureData(ctx context.Context, source *dagger.Directory) (*dagger.Directory, error) {
 	container, err := m.buildWithUv(ctx, source)
 	if err != nil {
@@ -35,6 +35,12 @@ func (m *KansallisarkistoMcp) fixtureData(ctx context.Context, source *dagger.Di
 			"uv", "run", "python", "scripts/ingest_voudintilit.py",
 			"--jsonl", "packages/kansallisarkisto-lib/tests/fixtures/voudintilit_sample.jsonl",
 			"--astia", "packages/kansallisarkisto-lib/tests/fixtures/voudintilit_astia_sample.jsonl",
+			"--output", "/tmp/lancedb",
+		}).
+		WithExec([]string{
+			"uv", "run", "python", "scripts/ingest_tuomiokirjat.py",
+			"--jsonl", "packages/kansallisarkisto-lib/tests/fixtures/tuomiokirjat_sample.jsonl",
+			"--astia", "packages/kansallisarkisto-lib/tests/fixtures/tuomiokirjat_astia_sample.jsonl",
 			"--output", "/tmp/lancedb",
 		}).
 		Directory("/tmp/lancedb"), nil

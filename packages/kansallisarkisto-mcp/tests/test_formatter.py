@@ -5,7 +5,16 @@ from __future__ import annotations
 import pytest
 
 from ra_mcp_kansallisarkisto_lib.dataset import SearchResult
-from ra_mcp_kansallisarkisto_mcp.formatter import SNIPPET_CHARS, format_charter, format_error, format_page, format_search_results, format_voudintilit_results
+from ra_mcp_kansallisarkisto_mcp.formatter import (
+    SNIPPET_CHARS,
+    format_charter,
+    format_court_page,
+    format_error,
+    format_page,
+    format_search_results,
+    format_tuomiokirjat_results,
+    format_voudintilit_results,
+)
 
 
 def charter(**overrides):
@@ -31,6 +40,19 @@ def results(*records):
 def test_hit_leads_with_the_df_number():
     """The DF number is the citable identifier — it has to be impossible to miss."""
     assert "**DF 526**" in format_search_results(results(charter()))
+
+
+def test_notes_follow_the_results_and_survive_an_empty_result():
+    """A note is advice about how the search was run — a capped prefix, a filter
+    that leaves out a third of the corpus. It has to reach the reader whether or
+    not anything matched, and never displace the results themselves."""
+    with_hits = results(charter())
+    with_hits.notes = ["issuingplace='Tallinn' matches the recorded place of ISSUE only."]
+    out = format_search_results(with_hits)
+    assert out.index("**DF 526**") < out.index("Note: issuingplace='Tallinn' matches")
+    empty = results()
+    empty.notes = ["No word in this corpus begins with 'zzzq'."]
+    assert format_search_results(empty) == "No Diplomatarium Fennicum results found for 'konung'.\nNote: No word in this corpus begins with 'zzzq'."
 
 
 def test_single_year_dating_is_not_rendered_as_a_range():
@@ -226,14 +248,93 @@ def test_no_page_field_can_add_a_line_to_the_block(field):
     assert hostile == control
 
 
-def test_notes_follow_the_results_and_survive_an_empty_result():
-    """A note is advice about how the search was run — a capped prefix, a filter
-    that leaves out a third of the corpus. It has to reach the reader whether or
-    not anything matched, and never displace the results themselves."""
-    with_hits = results(charter())
-    with_hits.notes = ["issuingplace='Tallinn' matches the recorded place of ISSUE only."]
-    out = format_search_results(with_hits)
-    assert out.index("**DF 526**") < out.index("Note: issuingplace='Tallinn' matches")
-    empty = results()
-    empty.notes = ["No word in this corpus begins with 'zzzq'."]
-    assert format_search_results(empty) == "No Diplomatarium Fennicum results found for 'konung'.\nNote: No word in this corpus begins with 'zzzq'."
+# --- tuomiokirjat pages ---------------------------------------------------------
+
+
+def court_page(**overrides):
+    base = {
+        "page_id": "Y4Q4IZcBCao99UPKS6L8",
+        "volume_id": 2320246345,
+        "page": 45,
+        "file_id": "45",
+        "collection": "Raastuvanoikeuksien renovoidut tuomiokirjat",
+        "series": "Helsingin raastuvanoikeuden tuomiokirjat",
+        "subseries": "",
+        "unit": "Tuomiokirjat",
+        "reference": "g:87",
+        "year_start": 1792,
+        "year_end": 1792,
+        "year_from": 1792,
+        "year_to": 1792,
+        "text": "76. 1792 then 3. Maji Ehronen i Kraft af sin fod sel",
+        "url": "https://astia.narc.fi/uusiastia/viewer/?fileId=5930213631&aineistoId=2320246345",
+    }
+    return {**base, **overrides}
+
+
+def test_court_hit_cites_series_signum_year_and_page():
+    """How a court record is cited: the series, its volume's signum, the year, the page."""
+    assert "**Helsingin raastuvanoikeuden tuomiokirjat g:87 1792, p. 45**" in format_tuomiokirjat_results(results(court_page()))
+
+
+def test_court_hit_names_the_archive_on_its_second_line():
+    out = format_tuomiokirjat_results(results(court_page()))
+    assert "  Raastuvanoikeuksien renovoidut tuomiokirjat · page Y4Q4IZcBCao99UPKS6L8" in out
+
+
+def test_court_hit_includes_its_subseries_when_there_is_one():
+    out = format_tuomiokirjat_results(results(court_page(subseries="Viipurin raastuvanoikeuden varsinaisasiat")))
+    assert "Raastuvanoikeuksien renovoidut tuomiokirjat · Viipurin raastuvanoikeuden varsinaisasiat · page" in out
+
+
+def test_court_hit_without_a_signum_still_cites_series_year_and_page():
+    assert "**Helsingin raastuvanoikeuden tuomiokirjat 1792, p. 45**" in format_tuomiokirjat_results(results(court_page(reference="")))
+
+
+def test_court_hit_spanning_years_shows_the_range():
+    assert "a:1 1622–1639, p. 66**" in format_tuomiokirjat_results(results(court_page(reference="a:1", page=66, year_from=1622, year_to=1639)))
+
+
+def test_undated_court_page_omits_the_year():
+    undated = court_page(year_start=None, year_end=None, year_from=None, year_to=None)
+    assert "**Helsingin raastuvanoikeuden tuomiokirjat g:87, p. 45**" in format_tuomiokirjat_results(results(undated))
+
+
+def test_court_hit_carries_its_astia_link_and_flags_a_missing_one():
+    assert "fileId=5930213631&aineistoId=2320246345" in format_tuomiokirjat_results(results(court_page()))
+    assert "no Astia link" in format_tuomiokirjat_results(results(court_page(url="")))
+
+
+def test_empty_court_page_is_labelled():
+    assert "no text recognised on this page" in format_tuomiokirjat_results(results(court_page(text="")))
+
+
+def test_full_court_page_has_everything_and_names_its_neighbours():
+    long_text = "ord " * 500
+    out = format_court_page({**court_page(text=long_text, subseries="Sub"), "previous_page_id": "kIQ4IZcBCao99UPKTaIn", "next_page_id": None}, "Y4Q4IZcBCao99UPKS6L8")
+    assert long_text.strip() in out
+    assert "Archive: Raastuvanoikeuksien renovoidut tuomiokirjat" in out
+    assert "Series: Helsingin raastuvanoikeuden tuomiokirjat" in out
+    assert "Subseries: Sub" in out
+    assert "Signum: g:87" in out
+    assert "Previous page: kIQ4IZcBCao99UPKTaIn" in out
+    assert "Next page: none" in out
+
+
+def test_missing_court_page():
+    assert "No page Y4Q4IZcBCao99UPKS6L8 in tuomiokirjat" in format_court_page(None, "Y4Q4IZcBCao99UPKS6L8")
+
+
+@pytest.mark.parametrize("field", ["collection", "series", "subseries", "unit", "reference", "url", "page_id", "text"])
+def test_no_court_field_can_add_a_line_to_the_block(field):
+    control = len(format_tuomiokirjat_results(results(court_page(**{field: "ab"}))).splitlines())
+    hostile = len(format_tuomiokirjat_results(results(court_page(**{field: "a\nb"}))).splitlines())
+    assert hostile == control
+
+
+@pytest.mark.parametrize("field", ["collection", "series", "subseries", "unit", "reference", "url", "page_id", "previous_page_id", "next_page_id"])
+def test_no_court_field_can_add_a_line_to_the_full_page_view(field):
+    base = {**court_page(), "previous_page_id": "kIQ4IZcBCao99UPKTaIn", "next_page_id": "I4Q4IZcBCao99UPKSqJT"}
+    control = len(format_court_page({**base, field: "ab"}, "Y4Q4IZcBCao99UPKS6L8").splitlines())
+    hostile = len(format_court_page({**base, field: "a\nb"}, "Y4Q4IZcBCao99UPKS6L8").splitlines())
+    assert hostile == control

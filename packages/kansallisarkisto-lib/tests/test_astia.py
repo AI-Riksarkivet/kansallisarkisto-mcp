@@ -80,6 +80,20 @@ def test_metadata_gives_the_reference_title_and_hierarchy():
     }
 
 
+def test_metadata_normalises_the_whitespace_in_labels():
+    """Court-record series arrive as 'a/1&#xA0;Porin raastuvanoikeuden tuomiokirjat' — the
+    shelf prefix joined to the name by a non-breaking space, which would otherwise sit
+    inside a citation and defeat any substring filter typed with an ordinary space."""
+    payload = {
+        **METADATA,
+        "nimekkeet": " Tuomiokirjat  ",
+        "ylemmat": [{"name": "AIN", "children": [{"name": "TASO", "tagData": "series"}, {"name": "LABEL", "tagData": "a/1&#xA0;Porin raastuvanoikeuden tuomiokirjat"}]}],
+    }
+    parsed = astia.parse_metadata(payload)
+    assert parsed["series"] == "a/1 Porin raastuvanoikeuden tuomiokirjat"
+    assert parsed["title"] == "Tuomiokirjat"
+
+
 def test_metadata_tolerates_a_missing_hierarchy_and_blank_dates():
     """The catalogue volume, 1580560161, is dated '-'."""
     assert astia.parse_metadata({"tunnisteet": "103", "nimekkeet": "x", "ajat": "-"}) == {

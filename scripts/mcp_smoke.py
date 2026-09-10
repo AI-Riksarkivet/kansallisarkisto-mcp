@@ -20,7 +20,9 @@ MCP_URL = os.environ.get("MCP_URL", "http://kansallisarkisto-mcp:8000/mcp")
 RANGED_DF = 1031
 # Ylä-Satakunnan tilikirja 1585 (reference 2372), page 16 of 40 — Gödik Fincke's grant.
 PAGE = "1578628789_0016"
-TOOLS = {"df_search", "df_get_charter", "voudintilit_search", "voudintilit_get_page"}
+# Helsingin raastuvanoikeuden tuomiokirjat g:87, 1792, page 45 — and its neighbours.
+COURT_PAGE = "Y4Q4IZcBCao99UPKS6L8"
+TOOLS = {"df_search", "df_get_charter", "voudintilit_search", "voudintilit_get_page", "tuomiokirjat_search", "tuomiokirjat_get_page"}
 
 
 def _text(result: object) -> str:
@@ -61,7 +63,20 @@ async def main() -> None:
         _check("voudintilit_get_page cites the page and links its image", "**2372 Ylä-Satakunnan tilikirja 1585, p. 16**" in page and "aineistoId=1578628789" in page, page[:300])
         _check("voudintilit_get_page names the neighbouring pages", "Previous page: 1578628789_0015" in page and "Next page: 1578628789_0017" in page, page[:400])
 
-    print("OK: MCP smoke test passed (9 checks)")
+        # A quoted phrase from the Pori 1622–39 volume's page 66, so the hit is within the
+        # page against the full corpus as well as the fixture.
+        court = _text(await client.call_tool("tuomiokirjat_search", {"keyword": '"Larsson fick löftte"', "limit": 25}))
+        _check("tuomiokirjat_search returns cited pages", "Tuomiokirjat search results" in court and "**Porin raastuvanoikeuden tuomiokirjat a:1 1622–1639, p. 66**" in court, court[:400])
+
+        court_page = _text(await client.call_tool("tuomiokirjat_get_page", {"page_id": COURT_PAGE}))
+        _check(
+            "tuomiokirjat_get_page cites the page and links its image",
+            "**Helsingin raastuvanoikeuden tuomiokirjat g:87 1792, p. 45**" in court_page and "aineistoId=2320246345" in court_page,
+            court_page[:400],
+        )
+        _check("tuomiokirjat_get_page names the neighbouring pages", "Previous page: kIQ4IZcBCao99UPKTaIn" in court_page and "Next page: I4Q4IZcBCao99UPKSqJT" in court_page, court_page[:500])
+
+    print("OK: MCP smoke test passed (12 checks)")
 
 
 if __name__ == "__main__":

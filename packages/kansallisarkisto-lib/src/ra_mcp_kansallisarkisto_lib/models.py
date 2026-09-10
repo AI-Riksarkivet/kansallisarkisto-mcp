@@ -1,8 +1,5 @@
-"""Pydantic models for the Sisältöhaku corpora.
-
-``df`` (Diplomatarium Fennicum) and ``voudintilit`` (bailiff accounts) are modelled;
-``tuomiokirjat`` follows the same shape and will land beside them.
-"""
+"""Pydantic models for the Sisältöhaku corpora: ``df`` (Diplomatarium Fennicum),
+``voudintilit`` (bailiff accounts) and ``tuomiokirjat`` (court records)."""
 
 from __future__ import annotations
 
@@ -44,6 +41,12 @@ def _clean(value: Any) -> str:
     return str(value).strip()
 
 
+# The year and page columns are int32. A value outside that range cannot land in one,
+# and would surface as an Arrow error from the batch writer — outside the per-line
+# guard, aborting a whole ingest over one bad row — so it is read as unknown here.
+_INT32 = range(-(2**31), 2**31)
+
+
 def _year(value: Any) -> int | None:
     """Coerce a source year to int, mapping the sentinel 0 (and blanks) to None."""
     if value in (None, "", UNKNOWN_YEAR):
@@ -52,7 +55,15 @@ def _year(value: Any) -> int | None:
         year = int(value)
     except (TypeError, ValueError):
         return None
-    return None if year == UNKNOWN_YEAR else year
+    return None if year == UNKNOWN_YEAR or year not in _INT32 else year
+
+
+def _page_number(file_id: str) -> int | None:
+    """The page number a ``file_id`` spells, or None when it is not a number an int32 holds."""
+    if not file_id.isdigit():
+        return None
+    number = int(file_id)
+    return number if number in _INT32 else None
 
 
 class DfRecord(BaseModel):
@@ -202,16 +213,13 @@ class VoudintilitRecord(BaseModel):
         volume = volume or {}
         volume_id = int(row.get("ay_id"))  # ty: ignore[invalid-argument-type]
         file_id = _clean(row.get("file_id"))
-        page = int(file_id) if file_id.isdigit() else None
+        page = _page_number(file_id)
         astia_file = (volume.get("files") or {}).get(page) if page is not None else None
 
         start, end = _year(row.get("alkuvuosi")), _year(row.get("loppuvuosi"))
-        low, high = start, end
-        if low is not None and high is not None and high < low:
-            # One volume reads 1615–1516, in Astia's own catalogue too. The end year
-            # precedes the corpus, so the start is the one to trust; widening to the
-            # span would put its pages in every century's results.
-            high = low
+        # One volume reads 1615–1516, in Astia's own catalogue too; the end year
+        # precedes the corpus (1539–1635), so the start is the one to trust.
+        low, high = _closed_years(start, end, plausible=(1539, 1635))
 
         return cls(
             page_id=_clean(row.get("objectID")),
@@ -225,8 +233,8 @@ class VoudintilitRecord(BaseModel):
             series=_clean(volume.get("series")),
             year_start=start,
             year_end=end,
-            year_from=low if low is not None else high,
-            year_to=high if high is not None else low,
+            year_from=low,
+            year_to=high,
             text=_clean(row.get("teksti")),
             url=page_url(volume_id, astia_file) if astia_file else "",
         )
@@ -236,3 +244,90 @@ class VoudintilitRecord(BaseModel):
         """The text the full-text index is built over: the page, its account book and
         collection — the same three fields Sisältöhaku's own search covers."""
         return " ".join(p for p in (self.text, self.account_book, self.collection) if p)
+
+
+def _closed_years(start: int | None, end: int | None, *, plausible: tuple[int, int]) -> tuple[int | None, int | None]:
+    """The year interval with the unknowns closed, as a date filter needs it.
+
+    An absent bound takes the other's value. An end before the start is a cataloguing
+    slip — one voudintilit volume, 703 tuomiokirjat pages — and one year is kept for
+    both bounds rather than the span, which would put the page in every year between.
+    Which year: the one inside ``plausible``, the corpus's own range, when only one is
+    (voudintilit's 1615–1516 ends before the corpus begins; tuomiokirjat's 1984–1895
+    starts after it closes), and the start when both are.
+    """
+    if start is not None and end is not None and end < start:
+        low, high = plausible
+        kept = next((year for year in (start, end) if low <= year <= high), start)
+        start = end = kept
+    return (start if start is not None else end, end if end is not None else start)
+
+
+class TuomiokirjatRecord(BaseModel):
+    """One page of a court record — 7.8M pages of Finnish lower-court proceedings,
+    1610–1931, from 223 archives.
+
+    A page, not a case: the export's unit is one image of one volume (``ay_id``), and
+    ``file_id`` is its place in that volume. The page id is the export's own
+    ``objectID``, not ``<volume>_<page>`` as for voudintilit: 60,000 images appear two
+    or three times in Sisältöhaku under distinct ids — the same link and years, and
+    usually the same text — so the pair is not unique here. The ingest keeps one record
+    per image; the model keeps the id that is.
+
+    The archival hierarchy comes from the export — ``collection`` is the archive
+    (``aineistokokonaisuus``), ``series`` its series (``pääsarja``), ``subseries`` the
+    three optional levels below joined, ``unit`` the record type
+    (``arkistoyksikkö``) — and the volume's signum (``reference``) from the Astia
+    snapshot. There is no derived search column: the full-text index sits on ``text``
+    itself, because the catalogue fields are filters here and a 7.8M-row duplicate of
+    the text would cost 10 GB on disk and as much again in the Space's boot-time copy.
+    """
+
+    page_id: str
+    volume_id: int
+    page: int | None = None
+    file_id: str = ""
+    collection: str = ""
+    series: str = ""
+    subseries: str = ""
+    unit: str = ""
+    reference: str = ""
+    year_start: int | None = None
+    year_end: int | None = None
+    year_from: int | None = None
+    year_to: int | None = None
+    text: str = ""
+    url: str = ""
+
+    @classmethod
+    def from_json(cls, row: dict[str, Any], volume: dict[str, Any] | None) -> TuomiokirjatRecord:
+        """Build a page from one line of ``tuomiokirjat.jsonl.gz`` and its volume's Astia entry.
+
+        Years and page numbers arrive as ints in most rows and as strings in some
+        hundred thousand; both parse. A row without a volume id raises ``TypeError`` or
+        ``ValueError``, the two the ingest skips a line on.
+        """
+        volume = volume or {}
+        file_id = _clean(row.get("file_id"))
+        start, end = _year(row.get("alkuvuosi")), _year(row.get("loppuvuosi"))
+        # The courts in this corpus sat 1610–1931; 139 pages read 1984–1895.
+        low, high = _closed_years(start, end, plausible=(1600, 1940))
+        return cls(
+            page_id=_clean(row.get("objectID")),
+            volume_id=int(row.get("ay_id")),  # ty: ignore[invalid-argument-type]
+            page=_page_number(file_id),
+            file_id=file_id,
+            collection=_clean(row.get("aineistokokonaisuus")),
+            series=_clean(row.get("pääsarja")),
+            subseries=" / ".join(p for p in (_clean(row.get(k)) for k in ("alasarja1", "alasarja2", "alasarja3")) if p),
+            unit=_clean(row.get("arkistoyksikkö")),
+            reference=_clean(volume.get("reference")),
+            year_start=start,
+            year_end=end,
+            year_from=low,
+            year_to=high,
+            text=_clean(row.get("teksti")),
+            # The export writes the viewer path with a doubled slash; same viewer, tidied
+            # to the form voudintilit's links take.
+            url=_clean(row.get("url")).replace("uusiastia//viewer", "uusiastia/viewer"),
+        )

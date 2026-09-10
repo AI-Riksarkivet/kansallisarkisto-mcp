@@ -1,4 +1,4 @@
-.PHONY: install harvest verify-data ingest-df fetch-astia ingest-voudintilit scan sbom serve serve-http inspect format lint typecheck check test test-mcp ci clean
+.PHONY: install harvest verify-data ingest-df fetch-astia ingest-voudintilit fetch-astia-tuomiokirjat ingest-tuomiokirjat scan sbom serve serve-http inspect format lint typecheck check test test-mcp ci clean
 
 # Install dependencies (all workspace packages + dev group)
 install:
@@ -25,6 +25,15 @@ fetch-astia:
 # Build the voudintilit LanceDB table from the export and the Astia snapshot in .data/
 ingest-voudintilit:
 	uv run python scripts/ingest_voudintilit.py
+
+# Fetch each tuomiokirjat volume's signum from Astia into .data/tuomiokirjat/astia.jsonl
+# (12,284 requests, ~2 h, resumable; the export already links every page)
+fetch-astia-tuomiokirjat:
+	uv run python scripts/fetch_astia.py --metadata-only --sleep 0.3 --export .data/tuomiokirjat/tuomiokirjat.jsonl.gz --output .data/tuomiokirjat/astia.jsonl
+
+# Build the tuomiokirjat LanceDB table (~20 min, ~7 GiB of memory, 21 GB on disk)
+ingest-tuomiokirjat:
+	uv run python scripts/ingest_tuomiokirjat.py
 
 # Run MCP server (stdio transport)
 serve:

@@ -25,6 +25,11 @@ MISSING_VOUDINTILIT_TABLE = (
     "with `make fetch-astia ingest-voudintilit`, and mounted at KA_LANCEDB_URI; until then no bailiff-account search can run."
 )
 
+MISSING_TUOMIOKIRJAT_TABLE = (
+    "The tuomiokirjat table is not available on this server. It is built from the harvested Sisältöhaku export and the Astia snapshot "
+    "with `make fetch-astia-tuomiokirjat ingest-tuomiokirjat`, and mounted at KA_LANCEDB_URI; until then no court-record search can run."
+)
+
 
 class MissingTableError(RuntimeError):
     """A LanceDB table this server serves has not been built at the configured URI.

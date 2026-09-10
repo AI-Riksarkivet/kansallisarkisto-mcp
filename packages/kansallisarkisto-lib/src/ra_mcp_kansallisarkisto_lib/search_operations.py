@@ -5,14 +5,14 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Any
 
-from .config import DEFAULT_LIMIT, DF_TABLE, VOUDINTILIT_TABLE
+from .config import DEFAULT_LIMIT, DF_TABLE, TUOMIOKIRJAT_TABLE, VOUDINTILIT_TABLE
 from .dataset import DEFAULT_FUZZINESS, FTS_COLUMN, SearchInputError, SearchResult, at_least, at_most, combine, equals, lancedb_fts_search, text_contains
 from .telemetry import get_tracer
 
 if TYPE_CHECKING:
     import lancedb
 
-__all__ = ["VOUDINTILIT_COLLECTIONS", "DfSearch", "SearchResult", "VoudintilitSearch"]
+__all__ = ["VOUDINTILIT_COLLECTIONS", "DfSearch", "SearchResult", "TuomiokirjatSearch", "VoudintilitSearch"]
 
 # The operations layer: one span per public method, nesting the spine's `search df`
 # span underneath. It is the layer that knows *what was asked* (which filters, in
@@ -181,7 +181,8 @@ VOUDINTILIT_COLLECTIONS = {
 # would admit non-ASCII digits.
 _PAGE_ID = re.compile(r"^([0-9]{1,19})_([0-9]{1,10})$")
 
-# No volume holds more than 628 pages; this only has to exceed that.
+# The largest volume is tuomiokirjat's 4,029 pages (voudintilit's 628); this only has
+# to exceed that.
 _MAX_PAGES_PER_VOLUME = 10_000
 
 _voudintilit_tracer = get_tracer("kansallisarkisto.voudintilit.operations")
@@ -252,7 +253,13 @@ class VoudintilitSearch:
                 at_least("year_to", year_min) if year_min is not None else None,
                 at_most("year_from", year_max) if year_max is not None else None,
             )
-            return lancedb_fts_search(self._db, self._table_name, keyword, limit=limit, offset=offset, where=where, match_all=match_all, fuzzy=fuzzy)
+            result = lancedb_fts_search(self._db, self._table_name, keyword, limit=limit, offset=offset, where=where, match_all=match_all, fuzzy=fuzzy)
+            if result.total_is_capped:
+                # 'smör' alone passes the cap; a bare "10000+" says nothing about what to do.
+                result.notes.append(
+                    "More than 10,000 pages match, so the total is a floor and the ranking is over a sample of them. Narrow with collection, account_book or a year range to make the total mean something."
+                )
+            return result
 
     def get_page(self, page_id: str) -> dict[str, Any] | None:
         """Return one page by its id, or ``None`` if there is no such page.
@@ -284,10 +291,112 @@ class VoudintilitSearch:
                 return None
 
             record = rows[0]
-            siblings = table.search().where(equals("volume_id", volume_id)).select(["page", "page_id"]).limit(_MAX_PAGES_PER_VOLUME).to_list()
-            ordered = sorted((row["page"], row["page_id"]) for row in siblings if row["page"] is not None)
-            earlier = [pid for number, pid in ordered if number < page]
-            later = [pid for number, pid in ordered if number > page]
-            record["previous_page_id"] = earlier[-1] if earlier else None
-            record["next_page_id"] = later[0] if later else None
+            _add_neighbours(table, record, volume_id, page)
+            return record
+
+
+def _add_neighbours(table: Any, record: dict[str, Any], volume_id: int, page: int) -> None:
+    """Set ``previous_page_id`` / ``next_page_id`` to the volume's nearest existing pages.
+
+    Nearest *existing*: volumes have gaps, so page N's neighbour is not always N ± 1.
+    One query reads the volume's page numbers — at most a few thousand rows, on the
+    ``volume_id`` BTree.
+    """
+    siblings = table.search().where(equals("volume_id", volume_id)).select(["page", "page_id"]).limit(_MAX_PAGES_PER_VOLUME).to_list()
+    ordered = sorted((row["page"], row["page_id"]) for row in siblings if row["page"] is not None)
+    earlier = [pid for number, pid in ordered if number < page]
+    later = [pid for number, pid in ordered if number > page]
+    record["previous_page_id"] = earlier[-1] if earlier else None
+    record["next_page_id"] = later[0] if later else None
+
+
+# A page id is the export's objectID: a 20-character Elasticsearch id for most pages,
+# "<volume>_<page>" for some 892,000 (the ones whose page number the export spells as a string). Both fit in 64 characters; anything longer is not
+# a page and is answered as a miss before it reaches a predicate.
+_MAX_PAGE_ID_LENGTH = 64
+
+_tuomiokirjat_tracer = get_tracer("kansallisarkisto.tuomiokirjat.operations")
+
+
+class TuomiokirjatSearch:
+    """Full-text search and page lookup over the ``tuomiokirjat`` table."""
+
+    def __init__(self, db: lancedb.DBConnection, *, table_name: str = TUOMIOKIRJAT_TABLE) -> None:
+        self._db = db
+        self._table_name = table_name
+
+    def search(
+        self,
+        keyword: str,
+        *,
+        limit: int = DEFAULT_LIMIT,
+        offset: int = 0,
+        collection: str | None = None,
+        series: str | None = None,
+        year_min: int | None = None,
+        year_max: int | None = None,
+        match_all: bool = True,
+        fuzzy: int = DEFAULT_FUZZINESS,
+    ) -> SearchResult:
+        """Search the court-record pages, optionally narrowed by archive, series and year.
+
+        ``collection`` and ``series`` are case-insensitive substrings: 223 archives and 444
+        series are too many for a fixed choice, and a court's name — ``Turun``, ``Porin``,
+        ``Viipurin`` — is how a caller will reach for them. The index is on ``text``
+        itself (see :class:`TuomiokirjatRecord`), hence ``fts_column``.
+
+        Raises:
+            SearchInputError: For the spine's guards — a blank keyword, a bad page, fuzzy
+                on a quoted phrase.
+        """
+        attributes = {
+            "tuomiokirjat.keyword": keyword,
+            "tuomiokirjat.limit": limit,
+            "tuomiokirjat.offset": offset,
+            "tuomiokirjat.match_all": match_all,
+            "tuomiokirjat.fuzzy": fuzzy,
+            **({"tuomiokirjat.collection": collection} if collection else {}),
+            **({"tuomiokirjat.series": series} if series else {}),
+            **({"tuomiokirjat.year_min": year_min} if year_min is not None else {}),
+            **({"tuomiokirjat.year_max": year_max} if year_max is not None else {}),
+        }
+        with _tuomiokirjat_tracer.start_as_current_span("TuomiokirjatSearch.search", attributes=attributes):
+            where = combine(
+                text_contains("collection", collection) if collection else None,
+                text_contains("series", series) if series else None,
+                at_least("year_to", year_min) if year_min is not None else None,
+                at_most("year_from", year_max) if year_max is not None else None,
+            )
+            result = lancedb_fts_search(self._db, self._table_name, keyword, limit=limit, offset=offset, where=where, match_all=match_all, fuzzy=fuzzy, fts_column="text")
+            if result.total_is_capped:
+                # Routine on 7.8M pages: a bare "10000+" says nothing about what to do.
+                result.notes.append(
+                    "More than 10,000 pages match, so the total is a floor and the ranking is over a sample of them. Narrow with collection (the archive), series, or a year range to make the total mean something."
+                )
+            return result
+
+    def get_page(self, page_id: str) -> dict[str, Any] | None:
+        """Return one page by its id, or ``None`` if there is no such page.
+
+        The record carries ``previous_page_id`` and ``next_page_id``, the volume's nearest
+        existing pages on either side. The id is looked up on its own BTree; the
+        neighbours on ``volume_id``'s.
+        """
+        with _tuomiokirjat_tracer.start_as_current_span("TuomiokirjatSearch.get_page", attributes={"tuomiokirjat.page_id": str(page_id)}) as span:
+            wanted = page_id.strip() if isinstance(page_id, str) else ""
+            if not wanted or len(wanted) > _MAX_PAGE_ID_LENGTH:
+                span.set_attribute("tuomiokirjat.found", False)
+                return None
+
+            table = self._db.open_table(self._table_name)
+            rows = table.search().where(equals("page_id", wanted)).select(list(table.schema.names)).limit(1).to_list()
+            span.set_attribute("tuomiokirjat.found", bool(rows))
+            if not rows:
+                return None
+
+            record = rows[0]
+            if record.get("page") is not None:
+                _add_neighbours(table, record, record["volume_id"], record["page"])
+            else:
+                record["previous_page_id"] = record["next_page_id"] = None
             return record

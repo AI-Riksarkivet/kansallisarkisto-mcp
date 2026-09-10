@@ -15,8 +15,10 @@ FIXTURES = Path(__file__).parents[2] / "kansallisarkisto-lib" / "tests" / "fixtu
 DF_FIXTURE = FIXTURES / "df_sample.jsonl"
 VOUDINTILIT_FIXTURE = FIXTURES / "voudintilit_sample.jsonl"
 VOUDINTILIT_ASTIA_FIXTURE = FIXTURES / "voudintilit_astia_sample.jsonl"
+TUOMIOKIRJAT_FIXTURE = FIXTURES / "tuomiokirjat_sample.jsonl"
+TUOMIOKIRJAT_ASTIA_FIXTURE = FIXTURES / "tuomiokirjat_astia_sample.jsonl"
 
-READY = {"status": "ready", "table": "df, voudintilit"}
+READY = {"status": "ready", "table": "df, voudintilit, tuomiokirjat"}
 
 
 @pytest.fixture(scope="module")
@@ -43,6 +45,7 @@ def tools(monkeypatch):
 
     monkeypatch.setattr(tools, "_search", None)
     monkeypatch.setattr(tools, "_voudintilit_search", None)
+    monkeypatch.setattr(tools, "_tuomiokirjat_search", None)
     return tools
 
 
@@ -86,9 +89,10 @@ def test_ready_reports_not_ready_without_a_table(client, monkeypatch, tmp_path, 
     assert client.get("/health").status_code == 200
 
 
-def test_ready_reports_ready_once_every_table_is_searchable(client, monkeypatch, tools, df_search, voudintilit_search):
+def test_ready_reports_ready_once_every_table_is_searchable(client, monkeypatch, tools, df_search, voudintilit_search, tuomiokirjat_search):
     monkeypatch.setattr(tools, "_search", df_search)
     monkeypatch.setattr(tools, "_voudintilit_search", voudintilit_search)
+    monkeypatch.setattr(tools, "_tuomiokirjat_search", tuomiokirjat_search)
     response = client.get("/ready")
     assert response.status_code == 200
     assert response.json() == READY
@@ -144,6 +148,22 @@ def test_ready_is_503_while_df_is_missing(client, monkeypatch, tmp_path, tools):
 def test_ready_is_200_once_the_tables_are_there(client, monkeypatch, tmp_path, tools):
     import lancedb
 
+    from ra_mcp_kansallisarkisto_lib.ingest import ingest_df, ingest_tuomiokirjat, ingest_voudintilit
+
+    uri = str(tmp_path / "db")
+    db = lancedb.connect(uri)
+    ingest_df(db, DF_FIXTURE)
+    ingest_voudintilit(db, VOUDINTILIT_FIXTURE, VOUDINTILIT_ASTIA_FIXTURE)
+    ingest_tuomiokirjat(db, TUOMIOKIRJAT_FIXTURE, TUOMIOKIRJAT_ASTIA_FIXTURE)
+    monkeypatch.setattr(tools.settings, "ka_lancedb_uri", uri)
+    r = client.get("/ready")
+    assert r.status_code == 200
+    assert r.json() == READY
+
+
+def test_ready_is_503_while_tuomiokirjat_is_missing(client, monkeypatch, tmp_path, tools):
+    import lancedb
+
     from ra_mcp_kansallisarkisto_lib.ingest import ingest_df, ingest_voudintilit
 
     uri = str(tmp_path / "db")
@@ -152,5 +172,5 @@ def test_ready_is_200_once_the_tables_are_there(client, monkeypatch, tmp_path, t
     ingest_voudintilit(db, VOUDINTILIT_FIXTURE, VOUDINTILIT_ASTIA_FIXTURE)
     monkeypatch.setattr(tools.settings, "ka_lancedb_uri", uri)
     r = client.get("/ready")
-    assert r.status_code == 200
-    assert r.json() == READY
+    assert r.status_code == 503
+    assert "tuomiokirjat table is not available" in r.json()["reason"]

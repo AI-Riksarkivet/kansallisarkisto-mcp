@@ -77,3 +77,36 @@ def voudintilit_search(db, voudintilit_table):
     from ra_mcp_kansallisarkisto_lib.search_operations import VoudintilitSearch
 
     return VoudintilitSearch(db)
+
+
+# 18 real tuomiokirjat pages from 11 volumes: the Pori 1622–39 and Helsinki 1792 town
+# courts with their neighbouring pages, a duplicated image under two ids (twice), string
+# years and string page numbers, the inverted-year and undated pages, the 1984–1895
+# outlier, a page without a link, an empty page, and a page with subseries. With it, the
+# Astia metadata of those volumes — every one has a signum.
+TUOMIOKIRJAT_FIXTURE = FIXTURES / "tuomiokirjat_sample.jsonl"
+TUOMIOKIRJAT_ASTIA_FIXTURE = FIXTURES / "tuomiokirjat_astia_sample.jsonl"
+
+
+@pytest.fixture
+def tuomiokirjat_fixture() -> Path:
+    return TUOMIOKIRJAT_FIXTURE
+
+
+@pytest.fixture
+def tuomiokirjat_astia_fixture() -> Path:
+    return TUOMIOKIRJAT_ASTIA_FIXTURE
+
+
+@pytest.fixture
+def tuomiokirjat_table(db):
+    from ra_mcp_kansallisarkisto_lib.ingest import ingest_tuomiokirjat
+
+    return ingest_tuomiokirjat(db, TUOMIOKIRJAT_FIXTURE, TUOMIOKIRJAT_ASTIA_FIXTURE)
+
+
+@pytest.fixture
+def tuomiokirjat_search(db, tuomiokirjat_table):
+    from ra_mcp_kansallisarkisto_lib.search_operations import TuomiokirjatSearch
+
+    return TuomiokirjatSearch(db)

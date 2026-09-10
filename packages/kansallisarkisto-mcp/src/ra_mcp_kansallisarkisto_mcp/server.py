@@ -9,9 +9,9 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from ra_mcp_kansallisarkisto_lib.config import DF_TABLE, VOUDINTILIT_TABLE, stage_lancedb
+from ra_mcp_kansallisarkisto_lib.config import DF_TABLE, TUOMIOKIRJAT_TABLE, VOUDINTILIT_TABLE, stage_lancedb
 from ra_mcp_kansallisarkisto_lib.dataset import get_lancedb, table_names
-from ra_mcp_kansallisarkisto_lib.search_operations import DfSearch, VoudintilitSearch
+from ra_mcp_kansallisarkisto_lib.search_operations import DfSearch, TuomiokirjatSearch, VoudintilitSearch
 from ra_mcp_kansallisarkisto_mcp.settings import settings
 from ra_mcp_kansallisarkisto_mcp.telemetry import init_telemetry, shutdown_telemetry
 from ra_mcp_kansallisarkisto_mcp.tools import kansallisarkisto_mcp
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 PROBE_KEYWORD = "probe"
 
 # What a missing table costs, per corpus — the boot line says it in these terms.
-CORPUS_TOOLS = {DF_TABLE: "charter", VOUDINTILIT_TABLE: "bailiff-account"}
+CORPUS_TOOLS = {DF_TABLE: "charter", VOUDINTILIT_TABLE: "bailiff-account", TUOMIOKIRJAT_TABLE: "court-record"}
 
 
 def stage_tables() -> None:
@@ -64,7 +64,7 @@ def log_table_status() -> None:
     logger.info("LanceDB at %s — tables: %s", uri, present)
 
     # Built here rather than at import, so a test can swap either facade.
-    for table, facade in ((DF_TABLE, DfSearch), (VOUDINTILIT_TABLE, VoudintilitSearch)):
+    for table, facade in ((DF_TABLE, DfSearch), (VOUDINTILIT_TABLE, VoudintilitSearch), (TUOMIOKIRJAT_TABLE, TuomiokirjatSearch)):
         if table not in tables:
             logger.error(
                 "LanceDB at %s has no '%s' table — every %s tool call will return the missing-table error. Tables present: %s",

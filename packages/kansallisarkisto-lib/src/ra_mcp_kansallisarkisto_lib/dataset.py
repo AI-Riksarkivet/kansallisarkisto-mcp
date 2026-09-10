@@ -380,8 +380,16 @@ def lancedb_fts_search(
     columns: Sequence[str] | None = None,
     match_all: bool = True,
     fuzzy: int = DEFAULT_FUZZINESS,
+    fts_column: str = FTS_COLUMN,
 ) -> SearchResult:
     """Full-text search returning one correctly-paginated page and a true total.
+
+    ``fts_column`` is the column the table's full-text index was built on. df and
+    voudintilit index a derived :data:`FTS_COLUMN` that folds catalogue fields in with
+    the text; a corpus with nothing worth folding in — tuomiokirjat, whose catalogue
+    fields are filters and whose 7.8M pages would pay 10 GB for the duplicate — indexes
+    its text column itself. The projection still drops only :data:`FTS_COLUMN`: a text
+    column that carries the index is the payload, not a repeat of one, and stays.
 
     Filters are pushed into LanceDB via ``where`` (a SQL predicate), so both the
     total and the page are computed over the already-filtered result set.
@@ -448,7 +456,7 @@ def lancedb_fts_search(
             raise SearchInputError(f"fuzzy={fuzzy} cannot be combined with a quoted phrase; drop the quotes to search the words fuzzily, or use fuzzy=0 for the exact phrase")
         request: Any = keyword
     elif _needs_expansion(keyword):
-        request = _expanded_query(db, table_name, keyword, fts_column=FTS_COLUMN, match_all=match_all, fuzzy=fuzzy, notes=notes)
+        request = _expanded_query(db, table_name, keyword, fts_column=fts_column, match_all=match_all, fuzzy=fuzzy, notes=notes)
         if request is None:
             # Nothing in the corpus can satisfy this — an ordinary empty answer,
             # and one worth counting as such.
@@ -456,8 +464,8 @@ def lancedb_fts_search(
             return SearchResult(records=[], total_hits=0, keyword=keyword, offset=offset, limit=limit, notes=notes)
     else:
         operator = FullTextOperator.AND if match_all else FullTextOperator.OR
-        request = MatchQuery(keyword, column=FTS_COLUMN, operator=operator, fuzziness=fuzzy)
-    query: Any = table.search(request, query_type="fts")
+        request = MatchQuery(keyword, column=fts_column, operator=operator, fuzziness=fuzzy)
+    query: Any = table.search(request, query_type="fts", fts_columns=fts_column)
     if columns is None:
         columns = [name for name in table.schema.names if name != FTS_COLUMN]
     query = query.select([*columns, "_score"])

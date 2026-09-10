@@ -136,3 +136,155 @@ def test_voudintilit_schema_and_model_cannot_drift_apart():
     from ra_mcp_kansallisarkisto_lib.models import VoudintilitRecord
 
     assert set(VoudintilitRecord.model_fields) | {FTS_COLUMN} == set(VOUDINTILIT_SCHEMA.names)
+
+
+# --- tuomiokirjat ----------------------------------------------------------------
+
+# Three rows shaped like the export: two are the same image of the same volume under
+# distinct ids — Sisältöhaku holds 60,000 such pairs — the third is the next page.
+COURT_ROWS = [
+    {
+        "objectID": "eaYlI5cBCao99UPKZp70",
+        "ay_id": 633828404,
+        "file_id": 1,
+        "alkuvuosi": 1817,
+        "loppuvuosi": 1817,
+        "teksti": "Förtekning på numeroittua lehtiä",
+        "url": "https://astia.narc.fi/uusiastia//viewer/?fileId=6702705894&aineistoId=633828404",
+        "aineistokokonaisuus": "Lappeen tuomiokunnan renovoidut tuomiokirjat",
+        "pääsarja": "Varsinaisten asioiden pöytäkirjat",
+        "alasarja1": "",
+        "alasarja2": "",
+        "alasarja3": "",
+        "arkistoyksikkö": "Varsinaisten asioiden pöytäkirjat",
+    },
+    {
+        "objectID": "16YlI5cBCao99UPKgKEG",
+        "ay_id": 633828404,
+        "file_id": 1,
+        "alkuvuosi": 1817,
+        "loppuvuosi": 1817,
+        "teksti": "Förtekning på numeroittua lehtiä (re-recognised)",
+        "url": "https://astia.narc.fi/uusiastia//viewer/?fileId=6702705894&aineistoId=633828404",
+        "aineistokokonaisuus": "Lappeen tuomiokunnan renovoidut tuomiokirjat",
+        "pääsarja": "Varsinaisten asioiden pöytäkirjat",
+        "alasarja1": "",
+        "alasarja2": "",
+        "alasarja3": "",
+        "arkistoyksikkö": "Varsinaisten asioiden pöytäkirjat",
+    },
+    {
+        "objectID": "eqYlI5cBCao99UPKZp76",
+        "ay_id": 633828404,
+        "file_id": "2",
+        "alkuvuosi": "1817",
+        "loppuvuosi": "1817",
+        "teksti": "den 14 Aprill börjades Winter Tinget",
+        "url": "https://astia.narc.fi/uusiastia//viewer/?fileId=6702705897&aineistoId=633828404",
+        "aineistokokonaisuus": "Lappeen tuomiokunnan renovoidut tuomiokirjat",
+        "pääsarja": "Varsinaisten asioiden pöytäkirjat",
+        "alasarja1": "",
+        "alasarja2": "",
+        "alasarja3": "",
+        "arkistoyksikkö": "Varsinaisten asioiden pöytäkirjat",
+    },
+]
+COURT_ASTIA = {
+    "volume_id": 633828404,
+    "reference": "Ca:12",
+    "title": "Varsinaisten asioiden pöytäkirjat",
+    "dates": "xx.xx.1817-xx.xx.1817",
+    "fonds": "Lappeen tuomiokunnan renovoidut tuomiokirjat",
+    "series": "Ca Varsinaisten asioiden pöytäkirjat",
+    "files": {},
+}
+
+
+def _court_export(tmp_path, rows=COURT_ROWS):
+    import json
+
+    path = tmp_path / "tuomiokirjat.jsonl"
+    path.write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows), encoding="utf-8")
+    astia = tmp_path / "astia.jsonl"
+    astia.write_text(json.dumps(COURT_ASTIA, ensure_ascii=False) + "\n", encoding="utf-8")
+    return path, astia
+
+
+def test_tuomiokirjat_ingest_keeps_one_record_per_image(db, tmp_path):
+    """The same image twice under distinct ids would be the same page twice in every
+    result. The first occurrence is kept; the export's id stays the page id."""
+    from ra_mcp_kansallisarkisto_lib.ingest import ingest_tuomiokirjat
+
+    table = ingest_tuomiokirjat(db, *_court_export(tmp_path))
+    assert table.count_rows() == 2
+    assert {row["page_id"] for row in table.search().select(["page_id"]).limit(10).to_list()} == {"eaYlI5cBCao99UPKZp70", "eqYlI5cBCao99UPKZp76"}
+
+
+def test_tuomiokirjat_pages_without_a_page_number_are_never_mistaken_for_duplicates(db, tmp_path):
+    """A row whose file_id does not parse has no place in the volume to be a duplicate
+    of; with two of them keyed on the same blank file_id the second would silently
+    vanish. Every such row is kept — and the ingest must not abort on it either."""
+    from ra_mcp_kansallisarkisto_lib.ingest import ingest_tuomiokirjat
+
+    rows = [{**COURT_ROWS[0], "objectID": f"blank{i}", "file_id": ""} for i in range(3)] + [{**COURT_ROWS[2], "objectID": "odd", "file_id": "kansi"}]
+    table = ingest_tuomiokirjat(db, *_court_export(tmp_path, rows))
+    assert table.count_rows() == 4
+    assert {row["page"] for row in table.search().select(["page"]).limit(10).to_list()} == {None}
+
+
+def test_tuomiokirjat_out_of_range_numbers_are_skipped_not_fatal(db, tmp_path):
+    """A page number or year past int32 would otherwise raise from Arrow, outside the
+    per-line guard, and abort an 18-minute ingest over one bad row."""
+    from ra_mcp_kansallisarkisto_lib.ingest import ingest_tuomiokirjat
+
+    rows = [*COURT_ROWS, {**COURT_ROWS[2], "objectID": "huge", "file_id": 2**40, "alkuvuosi": 10**12, "loppuvuosi": 10**12}]
+    table = ingest_tuomiokirjat(db, *_court_export(tmp_path, rows))
+    huge = {row["page_id"]: row for row in table.search().select(["page_id", "page", "year_start", "year_from"]).limit(10).to_list()}["huge"]
+    assert (huge["page"], huge["year_start"], huge["year_from"]) == (None, None, None)
+
+
+def test_tuomiokirjat_has_no_derived_search_column_and_indexes_the_text(db, tmp_path):
+    from ra_mcp_kansallisarkisto_lib.ingest import ingest_tuomiokirjat
+
+    table = ingest_tuomiokirjat(db, *_court_export(tmp_path))
+    assert "searchable_text" not in table.schema.names
+    indexed = {idx.columns[0] for idx in table.list_indices()}
+    assert {"text", "page_id", "volume_id", "page", "year_from", "year_to"} <= indexed
+    # Both filters are substring LIKEs, which a bitmap cannot serve; on 7.7M rows the
+    # indexes would cost build time and disk for nothing.
+    assert not {"collection", "series"} & indexed
+
+
+def test_tuomiokirjat_ingest_joins_the_astia_reference(db, tmp_path):
+    from ra_mcp_kansallisarkisto_lib.ingest import ingest_tuomiokirjat
+
+    table = ingest_tuomiokirjat(db, *_court_export(tmp_path))
+    rows = {row["page_id"]: row for row in table.search().select(["page_id", "reference", "url", "page"]).limit(10).to_list()}
+    assert rows["eqYlI5cBCao99UPKZp76"]["reference"] == "Ca:12"
+    assert rows["eqYlI5cBCao99UPKZp76"]["page"] == 2
+    assert rows["eqYlI5cBCao99UPKZp76"]["url"] == "https://astia.narc.fi/uusiastia/viewer/?fileId=6702705897&aineistoId=633828404"
+
+
+def test_tuomiokirjat_ingest_without_a_snapshot_keeps_every_page(db, tmp_path):
+    from ra_mcp_kansallisarkisto_lib.ingest import ingest_tuomiokirjat
+
+    export, _ = _court_export(tmp_path)
+    table = ingest_tuomiokirjat(db, export, tmp_path / "absent.jsonl")
+    assert table.count_rows() == 2
+    assert {row["reference"] for row in table.search().select(["reference"]).limit(10).to_list()} == {""}
+
+
+def test_tuomiokirjat_ingest_empty_export_raises(db, tmp_path):
+    from ra_mcp_kansallisarkisto_lib.ingest import ingest_tuomiokirjat
+
+    empty = tmp_path / "empty.jsonl"
+    empty.write_text("", encoding="utf-8")
+    with pytest.raises(ValueError):
+        ingest_tuomiokirjat(db, empty)
+
+
+def test_tuomiokirjat_schema_and_model_cannot_drift_apart():
+    from ra_mcp_kansallisarkisto_lib.ingest import TUOMIOKIRJAT_SCHEMA
+    from ra_mcp_kansallisarkisto_lib.models import TuomiokirjatRecord
+
+    assert set(TuomiokirjatRecord.model_fields) == set(TUOMIOKIRJAT_SCHEMA.names)

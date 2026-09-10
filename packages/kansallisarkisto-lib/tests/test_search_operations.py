@@ -229,6 +229,23 @@ def test_voudintilit_empty_page_is_findable_by_its_account_book(voudintilit_sear
     assert "1576084083_0001" in _page_ids(voudintilit_search.search("tilikirja", limit=100))
 
 
+def test_voudintilit_alternatives_reach_both_spellings(voudintilit_search):
+    """The spine's 'a|b' is what stands in for a prefix on a corpus too large for one."""
+    found = _page_ids(voudintilit_search.search("Fincke|Nuksuma", limit=100))
+    assert {"1578628789_0016", "1580560161_0001"} <= found
+
+
+def test_voudintilit_capped_total_comes_with_advice(voudintilit_search, monkeypatch):
+    """'smör' alone passes the 10,000 cap on the real table."""
+    from ra_mcp_kansallisarkisto_lib import dataset
+
+    monkeypatch.setattr(dataset, "MAX_TOTAL_COUNT", 1)
+    capped = voudintilit_search.search("smör", limit=1)
+    assert capped.total_is_capped
+    assert any("collection" in note and "account_book" in note for note in capped.notes)
+    assert voudintilit_search.search("zzzq", limit=1).notes == []
+
+
 def test_voudintilit_results_omit_the_full_text_column(voudintilit_search):
     record = voudintilit_search.search("konung").records[0]
     assert "searchable_text" not in record
@@ -267,6 +284,135 @@ def test_voudintilit_get_page_rejects_an_absurdly_long_id(voudintilit_search):
 def test_voudintilit_get_page_returns_the_same_shape_as_a_search_hit(voudintilit_search):
     hit = voudintilit_search.search("konung", limit=1).records[0]
     page = voudintilit_search.get_page(hit["page_id"])
+    assert set(page) - {"_score", "_rowid", "previous_page_id", "next_page_id"} == set(hit) - {"_score", "_rowid"}
+
+
+# --- tuomiokirjat ----------------------------------------------------------------
+
+PORI_66 = "PpblIZcBCao99UPKvl9-"
+HELSINKI_45 = "Y4Q4IZcBCao99UPKS6L8"
+
+
+def test_court_search_finds_a_name(tuomiokirjat_search):
+    assert PORI_66 in _page_ids(tuomiokirjat_search.search("Larsson", limit=100))
+
+
+def test_court_search_returns_a_duplicated_image_once(tuomiokirjat_search):
+    """The fixture holds the Lappee volume's first page under two ids."""
+    result = tuomiokirjat_search.search("Förtekning", limit=100)
+    assert [rec["page_id"] for rec in result.records] == ["eaYlI5cBCao99UPKZp70"]
+
+
+def test_court_collection_filter_is_a_case_insensitive_substring(tuomiokirjat_search):
+    result = tuomiokirjat_search.search("1817", limit=100, collection="lappeen tuomiokunnan")
+    assert result.records
+    assert {rec["collection"] for rec in result.records} == {"Lappeen tuomiokunnan renovoidut tuomiokirjat"}
+
+
+def test_court_series_filter_is_a_case_insensitive_substring(tuomiokirjat_search):
+    result = tuomiokirjat_search.search("och", limit=100, series="porin")
+    assert result.records
+    assert {rec["series"] for rec in result.records} == {"Porin raastuvanoikeuden tuomiokirjat"}
+
+
+def test_court_inverted_years_filter_as_the_start_year(tuomiokirjat_search):
+    """The Åland page reads 1899–1898."""
+    assert "u8T7I5cBCao99UPKLKsq" in _page_ids(tuomiokirjat_search.search("Ahvenanmaa", limit=100, year_min=1899, year_max=1899))
+    assert "u8T7I5cBCao99UPKLKsq" not in _page_ids(tuomiokirjat_search.search("Ahvenanmaa", limit=100, year_min=1898, year_max=1898))
+
+
+def test_court_1984_page_filters_as_1895(tuomiokirjat_search):
+    found = _page_ids(tuomiokirjat_search.search("Lagfartsprotokoll", limit=100, year_min=1890, year_max=1900))
+    assert "uNJfJJcBCao99UPK2fWO" in found
+    assert "uNJfJJcBCao99UPK2fWO" not in _page_ids(tuomiokirjat_search.search("Lagfartsprotokoll", limit=100, year_min=1980))
+
+
+def test_court_undated_page_is_left_out_by_a_year_filter(tuomiokirjat_search):
+    assert "314155174_0002" in _page_ids(tuomiokirjat_search.search("Sälljärvi", limit=100))
+    assert "314155174_0002" not in _page_ids(tuomiokirjat_search.search("Sälljärvi", limit=100, year_min=1600))
+
+
+def test_court_alternatives_go_through_the_text_index(tuomiokirjat_search):
+    """The expanded boolean query has to be built on the column the index is on."""
+    assert {PORI_66, HELSINKI_45} <= _page_ids(tuomiokirjat_search.search("Larsson|Ehronen", limit=100))
+
+
+def test_court_capped_total_comes_with_advice(tuomiokirjat_search, monkeypatch):
+    """On 7.8M pages most common words pass the cap. A bare '10000+' tells the caller
+    nothing about what to do; the note says how to make the total mean something."""
+    from ra_mcp_kansallisarkisto_lib import dataset
+
+    monkeypatch.setattr(dataset, "MAX_TOTAL_COUNT", 1)
+    capped = tuomiokirjat_search.search("1817", limit=1)
+    assert capped.total_is_capped
+    assert any("collection" in note and "series" in note for note in capped.notes)
+    # With the cap at 1 every hit is a capped result; only a miss is not.
+    assert tuomiokirjat_search.search("zzzq", limit=1).notes == []
+
+
+def test_court_results_carry_the_text(tuomiokirjat_search):
+    record = tuomiokirjat_search.search("Larsson").records[0]
+    assert record["text"].startswith("Erich Larsson")
+    assert "searchable_text" not in record
+
+
+def test_court_get_page_by_id(tuomiokirjat_search):
+    page = tuomiokirjat_search.get_page(HELSINKI_45)
+    assert page is not None
+    assert (page["page"], page["reference"], page["series"]) == (45, "g:87", "Helsingin raastuvanoikeuden tuomiokirjat")
+    assert page["url"] == "https://astia.narc.fi/uusiastia/viewer/?fileId=5930213631&aineistoId=2320246345"
+
+
+def test_court_get_page_names_its_neighbours(tuomiokirjat_search):
+    page = tuomiokirjat_search.get_page(HELSINKI_45)
+    assert (page["previous_page_id"], page["next_page_id"]) == ("kIQ4IZcBCao99UPKTaIn", "I4Q4IZcBCao99UPKSqJT")
+
+
+def test_court_get_page_has_no_neighbour_beyond_the_corpus(tuomiokirjat_search):
+    """Pori page 65 is the volume's first page in the fixture."""
+    page = tuomiokirjat_search.get_page("V5blIZcBCao99UPKv18e")
+    assert (page["previous_page_id"], page["next_page_id"]) == (None, PORI_66)
+
+
+def test_court_get_page_of_an_empty_page(tuomiokirjat_search):
+    page = tuomiokirjat_search.get_page("kHjAIJcBCao99UPKuj1F")
+    assert page is not None
+    assert page["text"] == ""
+
+
+def test_court_get_page_quotes_its_id_safely(tuomiokirjat_search):
+    """The id is the one caller-supplied string that reaches a predicate."""
+    for page_id in ("x'y", "abc\\", "' OR 1=1 --", "abc\\' OR page_id != '"):
+        assert tuomiokirjat_search.get_page(page_id) is None, page_id
+
+
+def test_court_get_page_without_a_page_number_has_no_neighbours(db, tmp_path, tuomiokirjat_fixture, tuomiokirjat_astia_fixture):
+    """A page whose number did not parse cannot be placed in its volume; asking for its
+    neighbours must answer 'none', not fail."""
+    import json
+
+    from ra_mcp_kansallisarkisto_lib.ingest import ingest_tuomiokirjat
+    from ra_mcp_kansallisarkisto_lib.search_operations import TuomiokirjatSearch
+
+    rows = [json.loads(line) for line in tuomiokirjat_fixture.read_text(encoding="utf-8").splitlines() if line.strip()]
+    rows.append({**rows[0], "objectID": "unnumbered", "file_id": "kansi"})
+    export = tmp_path / "export.jsonl"
+    export.write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows), encoding="utf-8")
+    ingest_tuomiokirjat(db, export, tuomiokirjat_astia_fixture)
+    page = TuomiokirjatSearch(db).get_page("unnumbered")
+    assert page is not None
+    assert (page["page"], page["previous_page_id"], page["next_page_id"]) == (None, None, None)
+
+
+def test_court_get_page_unknown_or_dropped_returns_none(tuomiokirjat_search):
+    # The second id of the duplicated Lappee page was dropped at ingest.
+    for page_id in ("16YlI5cBCao99UPKgKEG", "nonsense", "", "x" * 5000):
+        assert tuomiokirjat_search.get_page(page_id) is None, page_id
+
+
+def test_court_get_page_returns_the_same_shape_as_a_search_hit(tuomiokirjat_search):
+    hit = tuomiokirjat_search.search("Larsson", limit=1).records[0]
+    page = tuomiokirjat_search.get_page(hit["page_id"])
     assert set(page) - {"_score", "_rowid", "previous_page_id", "next_page_id"} == set(hit) - {"_score", "_rowid"}
 
 

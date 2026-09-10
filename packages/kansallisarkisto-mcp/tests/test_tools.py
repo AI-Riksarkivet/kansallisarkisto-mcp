@@ -11,7 +11,7 @@ from fastmcp.tools import FunctionTool
 
 from ra_mcp_kansallisarkisto_mcp import tools
 
-TOOLS = ("df_search", "df_get_charter", "voudintilit_search", "voudintilit_get_page")
+TOOLS = ("df_search", "df_get_charter", "voudintilit_search", "voudintilit_get_page", "tuomiokirjat_search", "tuomiokirjat_get_page")
 
 
 @pytest.fixture(autouse=True)
@@ -19,6 +19,7 @@ def reset_search():
     yield
     tools._search = None
     tools._voudintilit_search = None
+    tools._tuomiokirjat_search = None
 
 
 async def call(tool: str, args: dict) -> str:
@@ -139,6 +140,41 @@ async def test_a_lancedb_valueerror_does_not_reach_the_client(df_search):
     assert "Float64" not in out
 
 
+async def test_a_prefix_reaches_a_charter_no_stem_or_fuzzy_could(df_search):
+    """DF 173 says 'leprosorum' and 'Reualie', has no recorded place, and was
+    invisible to 'lepros' at any fuzziness and to issuingplace='Tallinn'."""
+    tools._search = df_search
+    out = await call("df_search", {"keyword": "lepros* reval*|reual*|revel*|reuel*|reffl*"})
+    assert "**DF 173**" in out
+    assert "showing 1 of 1" in out
+
+
+async def test_a_place_filter_reports_what_it_leaves_out_even_when_empty(df_search):
+    tools._search = df_search
+    out = await call("df_search", {"keyword": "leprosorum", "issuingplace": "Tallinn"})
+    assert out.startswith("No Diplomatarium Fennicum results found")
+    assert "Note: issuingplace='Tallinn' matches the recorded place of ISSUE only" in out
+    assert "reval*|reual*" in out
+
+
+async def test_a_bad_prefix_is_an_actionable_message_not_a_crash(df_search):
+    tools._search = df_search
+    out = await call("df_search", {"keyword": "ab*"})
+    assert out.startswith("Error: 'ab*': a prefix needs at least 3 characters")
+
+
+async def test_prefix_search_and_the_place_trap_are_in_the_tool_description():
+    """The description is the only place a model learns either; nothing else
+    tests prose."""
+    async with Client(tools.kansallisarkisto_mcp) as client:
+        df_search = next(t for t in await client.list_tools() if t.name == "df_search")
+    assert "lepros*" in df_search.description
+    assert "ISSUED" in df_search.description
+    schema = json.dumps(df_search.inputSchema)
+    assert "trailing *" in schema
+    assert "reval*|reual*" in schema
+
+
 # --- voudintilit ----------------------------------------------------------------
 
 
@@ -214,39 +250,60 @@ async def test_voudintilit_missing_table_is_reported_as_text(monkeypatch, tmp_pa
     assert "voudintilit table is not available" in out
 
 
-async def test_a_prefix_reaches_a_charter_no_stem_or_fuzzy_could(df_search):
-    """DF 173 says 'leprosorum' and 'Reualie', has no recorded place, and was
-    invisible to 'lepros' at any fuzziness and to issuingplace='Tallinn'."""
-    tools._search = df_search
-    out = await call("df_search", {"keyword": "lepros* reval*|reual*|revel*|reuel*|reffl*"})
-    assert "**DF 173**" in out
-    assert "showing 1 of 1" in out
+# --- tuomiokirjat ----------------------------------------------------------------
 
 
-async def test_a_place_filter_reports_what_it_leaves_out_even_when_empty(df_search):
-    tools._search = df_search
-    out = await call("df_search", {"keyword": "leprosorum", "issuingplace": "Tallinn"})
-    assert out.startswith("No Diplomatarium Fennicum results found")
-    assert "Note: issuingplace='Tallinn' matches the recorded place of ISSUE only" in out
-    assert "reval*|reual*" in out
+async def test_court_search_cites_series_signum_year_and_page(tuomiokirjat_search):
+    tools._tuomiokirjat_search = tuomiokirjat_search
+    out = await call("tuomiokirjat_search", {"keyword": "Larsson"})
+    assert "Tuomiokirjat search results for 'Larsson'" in out
+    assert "**Porin raastuvanoikeuden tuomiokirjat a:1 1622–1639, p. 66**" in out
+    assert "https://astia.narc.fi/uusiastia/viewer/?fileId=5929607974&aineistoId=2317506414" in out
 
 
-async def test_a_bad_prefix_is_an_actionable_message_not_a_crash(df_search):
-    tools._search = df_search
-    out = await call("df_search", {"keyword": "ab*"})
-    assert out.startswith("Error: 'ab*': a prefix needs at least 3 characters")
+async def test_court_filters_reach_the_query(tuomiokirjat_search):
+    tools._tuomiokirjat_search = tuomiokirjat_search
+    out = await call("tuomiokirjat_search", {"keyword": "1817", "collection": "Lappeen", "limit": 100})
+    assert "Lappeen tuomiokunnan renovoidut tuomiokirjat" in out
+    assert "Helsingin" not in out
+    out = await call("tuomiokirjat_search", {"keyword": "Maji", "series": "Helsingin", "year_min": 1790, "year_max": 1795, "limit": 100})
+    assert "**Helsingin raastuvanoikeuden tuomiokirjat g:87 1792, p. 45**" in out
 
 
-async def test_prefix_search_and_the_place_trap_are_in_the_tool_description():
-    """The description is the only place a model learns either; nothing else
-    tests prose."""
-    async with Client(tools.kansallisarkisto_mcp) as client:
-        df_search = next(t for t in await client.list_tools() if t.name == "df_search")
-    assert "lepros*" in df_search.description
-    assert "ISSUED" in df_search.description
-    schema = json.dumps(df_search.inputSchema)
-    assert "trailing *" in schema
-    assert "reval*|reual*" in schema
+async def test_court_inverted_year_range_is_reported(tuomiokirjat_search):
+    tools._tuomiokirjat_search = tuomiokirjat_search
+    out = await call("tuomiokirjat_search", {"keyword": "Maji", "year_min": 1800, "year_max": 1700})
+    assert "inverted" in out
 
 
-# --- voudintilit ----------------------------------------------------------------
+async def test_court_get_page_gives_the_text_link_and_neighbours(tuomiokirjat_search):
+    tools._tuomiokirjat_search = tuomiokirjat_search
+    out = await call("tuomiokirjat_get_page", {"page_id": "Y4Q4IZcBCao99UPKS6L8"})
+    assert "**Helsingin raastuvanoikeuden tuomiokirjat g:87 1792, p. 45**" in out
+    assert "Text:" in out
+    assert "Ehronen i Kraft" in out
+    assert "Previous page: kIQ4IZcBCao99UPKTaIn" in out
+    assert "Next page: I4Q4IZcBCao99UPKSqJT" in out
+
+
+async def test_court_get_page_unknown_id(tuomiokirjat_search):
+    tools._tuomiokirjat_search = tuomiokirjat_search
+    out = await call("tuomiokirjat_get_page", {"page_id": "nonsense"})
+    assert "No page nonsense in tuomiokirjat" in out
+
+
+async def test_court_prefix_search_is_refused_with_advice(tuomiokirjat_search, monkeypatch):
+    """7.7M pages are far past the vocabulary cap; the refusal must say what to do instead."""
+    from ra_mcp_kansallisarkisto_lib import dataset
+
+    monkeypatch.setattr(dataset, "MAX_VOCABULARY_ROWS", 1)
+    tools._tuomiokirjat_search = tuomiokirjat_search
+    out = await call("tuomiokirjat_search", {"keyword": "Lars*"})
+    assert out.startswith("Error: prefix search")
+    assert "bref|breff" in out and "fuzzy=1" in out
+
+
+async def test_court_missing_table_is_reported_as_text(monkeypatch, tmp_path):
+    monkeypatch.setattr(tools.settings, "ka_lancedb_uri", str(tmp_path / "empty"))
+    assert "tuomiokirjat table is not available" in await call("tuomiokirjat_search", {"keyword": "Larsson"})
+    assert "tuomiokirjat table is not available" in await call("tuomiokirjat_get_page", {"page_id": "Y4Q4IZcBCao99UPKS6L8"})

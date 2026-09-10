@@ -76,18 +76,25 @@ def test_missing_table_is_reported_at_boot(caplog, monkeypatch, tmp_path):
     assert uri in caplog.text
 
 
-def _ingest_both(uri: str, df_fixture, voudintilit_fixture, voudintilit_astia_fixture) -> None:
-    from ra_mcp_kansallisarkisto_lib.ingest import ingest_voudintilit
+def _ingest_all(uri: str, fixtures) -> None:
+    """Every corpus's sample into one database; `fixtures` is the `all_fixtures` fixture."""
+    from ra_mcp_kansallisarkisto_lib.ingest import ingest_tuomiokirjat, ingest_voudintilit
 
     db = lancedb.connect(uri)
-    ingest_df(db, df_fixture)
-    ingest_voudintilit(db, voudintilit_fixture, voudintilit_astia_fixture)
+    ingest_df(db, fixtures["df"])
+    ingest_voudintilit(db, *fixtures["voudintilit"])
+    ingest_tuomiokirjat(db, *fixtures["tuomiokirjat"])
 
 
-def test_boot_probe_runs_a_real_query_on_a_healthy_table(caplog, monkeypatch, tmp_path, df_fixture, voudintilit_fixture, voudintilit_astia_fixture):
+@pytest.fixture
+def all_fixtures(df_fixture, voudintilit_fixture, voudintilit_astia_fixture, tuomiokirjat_fixture, tuomiokirjat_astia_fixture):
+    return {"df": df_fixture, "voudintilit": (voudintilit_fixture, voudintilit_astia_fixture), "tuomiokirjat": (tuomiokirjat_fixture, tuomiokirjat_astia_fixture)}
+
+
+def test_boot_probe_runs_a_real_query_on_a_healthy_table(caplog, monkeypatch, tmp_path, all_fixtures):
     """Listing table names only reads the manifest — the probe must touch the index."""
     uri = str(tmp_path / "db")
-    _ingest_both(uri, df_fixture, voudintilit_fixture, voudintilit_astia_fixture)
+    _ingest_all(uri, all_fixtures)
     monkeypatch.setattr(server.settings, "ka_lancedb_uri", uri)
     with caplog.at_level(logging.ERROR):
         server.log_table_status()
@@ -102,12 +109,13 @@ def test_missing_voudintilit_table_is_reported_at_boot(caplog, monkeypatch, tmp_
     with caplog.at_level(logging.ERROR):
         server.log_table_status()
     assert "has no 'voudintilit' table" in caplog.text
+    assert "has no 'tuomiokirjat' table" in caplog.text
     assert "has no 'df' table" not in caplog.text
 
 
-def test_boot_probe_checks_every_present_table(caplog, monkeypatch, tmp_path, df_fixture, voudintilit_fixture, voudintilit_astia_fixture):
+def test_boot_probe_checks_every_present_table(caplog, monkeypatch, tmp_path, all_fixtures):
     uri = str(tmp_path / "db")
-    _ingest_both(uri, df_fixture, voudintilit_fixture, voudintilit_astia_fixture)
+    _ingest_all(uri, all_fixtures)
     monkeypatch.setattr(server.settings, "ka_lancedb_uri", uri)
 
     class Unreadable:

@@ -1,6 +1,8 @@
 """Tests for DfRecord — the source-JSON conventions it has to normalise."""
 
-from ra_mcp_kansallisarkisto_lib.models import DfRecord, VoudintilitRecord
+import pytest
+
+from ra_mcp_kansallisarkisto_lib.models import DfRecord, TuomiokirjatRecord, VoudintilitRecord
 
 
 def test_unknown_year_zero_becomes_none():
@@ -149,6 +151,13 @@ def test_voudintilit_inverted_years_keep_the_start_year():
     assert (record.year_from, record.year_to) == (1615, 1615)
 
 
+def test_voudintilit_inverted_years_keep_the_end_when_only_it_is_plausible():
+    """The mirror case does not occur in the corpus, but the rule has to be the rule and
+    not an accident of trying the start first."""
+    record = VoudintilitRecord.from_json({**PAGE, "alkuvuosi": 1916, "loppuvuosi": 1615}, VOLUME)
+    assert (record.year_from, record.year_to) == (1615, 1615)
+
+
 def test_voudintilit_untitled_volume_takes_astias_title():
     """The export leaves the catalogue volume untitled; Astia names it."""
     record = VoudintilitRecord.from_json({**PAGE, "arkistoyksikkö": ""}, {**VOLUME, "title": "Satakunnan voudintilien arkistoluettelo"})
@@ -165,3 +174,104 @@ def test_voudintilit_searchable_text_matches_what_sisaltohaku_searches():
 def test_voudintilit_malformed_page_number_is_not_an_uncatchable_error():
     record = VoudintilitRecord.from_json({**PAGE, "file_id": "x"}, VOLUME)
     assert (record.page, record.url) == (None, "")
+
+
+# --- tuomiokirjat: one page of a court record ----------------------------------
+
+# Shaped like the first row of the export — Porin raastuvanoikeus, 1622–1639 — and the
+# Astia metadata probed for its volume (reference a:1).
+COURT_VOLUME = {
+    "volume_id": 2317506414,
+    "reference": "a:1",
+    "title": "Tuomiokirjat",
+    "dates": "xx.xx.1622-xx.xx.1639",
+    "fonds": "Raastuvanoikeuksien renovoidut tuomiokirjat",
+    "series": "a/1 Porin raastuvanoikeuden tuomiokirjat",
+    "files": {},
+}
+COURT_PAGE = {
+    "objectID": "PpblIZcBCao99UPKvl9-",
+    "arkistoyksikkö": "Tuomiokirjat",
+    "aineistokokonaisuus": "Raastuvanoikeuksien renovoidut tuomiokirjat",
+    "pääsarja": "Porin raastuvanoikeuden tuomiokirjat",
+    "alasarja1": "",
+    "alasarja2": "",
+    "alasarja3": "",
+    "ay_id": 2317506414,
+    "file_id": 66,
+    "url": "https://astia.narc.fi/uusiastia//viewer/?fileId=5929607974&aineistoId=2317506414",
+    "alkuvuosi": 1622,
+    "loppuvuosi": 1639,
+    "teksti": "Erich Larsson fick löftte förståndin Rätta 32 den 3 Februaryis",
+}
+
+
+def test_court_page_id_is_the_exports_own_id_not_volume_and_page():
+    """60,000 images appear two or three times in the export under distinct ids, so
+    '<volume>_<page>' is not unique here; objectID is, and is kept as the page id."""
+    record = TuomiokirjatRecord.from_json(COURT_PAGE, COURT_VOLUME)
+    assert (record.page_id, record.volume_id, record.page, record.file_id) == ("PpblIZcBCao99UPKvl9-", 2317506414, 66, "66")
+
+
+def test_court_page_accepts_the_string_typed_rows():
+    """315k rows carry their years as strings and 896k their file_id; same page."""
+    record = TuomiokirjatRecord.from_json({**COURT_PAGE, "alkuvuosi": "1622", "loppuvuosi": "1639", "file_id": "0066"}, COURT_VOLUME)
+    assert (record.year_from, record.year_to, record.page, record.file_id) == (1622, 1639, 66, "0066")
+
+
+def test_court_page_inverted_years_keep_the_start_when_both_are_plausible():
+    """703 pages are catalogued with the end before the start."""
+    record = TuomiokirjatRecord.from_json({**COURT_PAGE, "alkuvuosi": 1899, "loppuvuosi": 1898}, COURT_VOLUME)
+    assert (record.year_start, record.year_end, record.year_from, record.year_to) == (1899, 1898, 1899, 1899)
+
+
+def test_court_page_inverted_years_drop_the_bound_outside_the_corpus():
+    """139 pages read 1984–1895: the start is the slip, not the end — the courts in this
+    corpus sat until 1931. Keeping the start, as for voudintilit's 1615–1516 (where the
+    end preceded the corpus), would date them half a century after its close."""
+    record = TuomiokirjatRecord.from_json({**COURT_PAGE, "alkuvuosi": 1984, "loppuvuosi": 1895}, COURT_VOLUME)
+    assert (record.year_start, record.year_end) == (1984, 1895)
+    assert (record.year_from, record.year_to) == (1895, 1895)
+
+
+def test_court_page_unknown_years_become_none():
+    record = TuomiokirjatRecord.from_json({**COURT_PAGE, "alkuvuosi": 0, "loppuvuosi": 0}, COURT_VOLUME)
+    assert (record.year_from, record.year_to) == (None, None)
+
+
+def test_court_page_joins_its_subseries():
+    record = TuomiokirjatRecord.from_json({**COURT_PAGE, "alasarja1": "Varsinaiset asiat", "alasarja2": "Talvikäräjät", "alasarja3": ""}, COURT_VOLUME)
+    assert record.subseries == "Varsinaiset asiat / Talvikäräjät"
+    assert TuomiokirjatRecord.from_json(COURT_PAGE, COURT_VOLUME).subseries == ""
+
+
+def test_court_page_takes_its_reference_from_astia():
+    assert TuomiokirjatRecord.from_json(COURT_PAGE, COURT_VOLUME).reference == "a:1"
+    assert TuomiokirjatRecord.from_json(COURT_PAGE, None).reference == ""
+
+
+def test_court_page_keeps_the_exports_link_tidied():
+    """The export writes 'uusiastia//viewer'; the same viewer, one slash, as voudintilit's links."""
+    record = TuomiokirjatRecord.from_json(COURT_PAGE, COURT_VOLUME)
+    assert record.url == "https://astia.narc.fi/uusiastia/viewer/?fileId=5929607974&aineistoId=2317506414"
+    assert TuomiokirjatRecord.from_json({**COURT_PAGE, "url": ""}, COURT_VOLUME).url == ""
+
+
+def test_court_page_has_no_derived_search_column():
+    """Its index sits on the text itself — see lancedb_fts_search's fts_column."""
+    assert not hasattr(TuomiokirjatRecord.from_json(COURT_PAGE, COURT_VOLUME), "searchable_text")
+
+
+def test_court_page_numbers_past_int32_read_as_unknown():
+    """The columns are int32; a value that cannot land in one must become None here, not
+    an Arrow error from the batch writer that the per-line guard never sees."""
+    record = TuomiokirjatRecord.from_json({**COURT_PAGE, "file_id": 2**40, "alkuvuosi": 10**12, "loppuvuosi": -(2**40)}, COURT_VOLUME)
+    assert (record.page, record.year_start, record.year_end) == (None, None, None)
+    assert record.file_id == str(2**40)
+
+
+def test_court_page_malformed_volume_id_raises_a_skippable_error():
+    """The ingest skips a line on ValueError/TypeError and aborts on anything else."""
+    for bad in (None, "x"):
+        with pytest.raises((TypeError, ValueError)):
+            TuomiokirjatRecord.from_json({**COURT_PAGE, "ay_id": bad}, COURT_VOLUME)

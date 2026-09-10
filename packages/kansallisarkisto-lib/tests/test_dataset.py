@@ -99,6 +99,29 @@ def test_table_names_returns_a_plain_sorted_list(db, df_table):
     assert table_names(db) == ["df"]
 
 
+def test_search_can_index_a_table_on_its_text_column_directly(db):
+    """df and voudintilit fold catalogue fields into a derived searchable_text and index
+    that. tuomiokirjat has nothing worth folding in — its catalogue fields are filters —
+    and at 7.8M pages the duplicate column would cost 10 GB on disk and as much again in
+    the copy the Space makes at boot. So the index can sit on the text itself, and the
+    results then keep that column: it is the payload, not a repeat of one."""
+    import pyarrow as pa
+
+    from ra_mcp_kansallisarkisto_lib.dataset import build_fts_index, lancedb_fts_search
+
+    schema = pa.schema([pa.field("page_id", pa.string()), pa.field("text", pa.string())])
+    rows = [{"page_id": "1_1", "text": "Erich Larsson fick löfte"}, {"page_id": "1_2", "text": "then 3 Maji rådstugu"}]
+    db.create_table("pages", data=pa.Table.from_pylist(rows, schema=schema), mode="overwrite")
+    build_fts_index(db, "pages", column="text")
+
+    words = lancedb_fts_search(db, "pages", "larsson", limit=10, fts_column="text")
+    assert [rec["page_id"] for rec in words.records] == ["1_1"]
+    assert words.records[0]["text"] == "Erich Larsson fick löfte"
+
+    phrase = lancedb_fts_search(db, "pages", '"3 Maji"', limit=10, fts_column="text")
+    assert [rec["page_id"] for rec in phrase.records] == ["1_2"]
+
+
 def test_format_results_reports_a_capped_total_as_a_floor():
     """Printing a capped 10,000 bare would claim it as the real number of matches."""
     out = format_results(_result([{"df": "526"}], total_hits=10000, capped=True), label="Charter", render_record=_render)

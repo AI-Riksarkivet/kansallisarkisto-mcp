@@ -8,7 +8,7 @@ import pytest
 from ra_mcp_kansallisarkisto_lib.ingest import ingest_df
 from ra_mcp_kansallisarkisto_lib.search_operations import DfSearch
 
-# The same 18-charter sample the lib tests use, so the two layers are exercised
+# The same 19-charter sample the lib tests use, so the two layers are exercised
 # against identical data.
 DF_FIXTURE = Path(__file__).parents[2] / "kansallisarkisto-lib" / "tests" / "fixtures" / "df_sample.jsonl"
 
@@ -49,3 +49,28 @@ def voudintilit_search(tmp_path):
     db = lancedb.connect(str(tmp_path / "voudintilit.lance"))
     ingest_voudintilit(db, VOUDINTILIT_FIXTURE, VOUDINTILIT_ASTIA_FIXTURE)
     return VoudintilitSearch(db)
+
+
+# The lib tests' 18-page tuomiokirjat sample and its Astia snapshot.
+TUOMIOKIRJAT_FIXTURE = DF_FIXTURE.parent / "tuomiokirjat_sample.jsonl"
+TUOMIOKIRJAT_ASTIA_FIXTURE = DF_FIXTURE.parent / "tuomiokirjat_astia_sample.jsonl"
+
+
+@pytest.fixture
+def tuomiokirjat_fixture() -> Path:
+    return TUOMIOKIRJAT_FIXTURE
+
+
+@pytest.fixture
+def tuomiokirjat_astia_fixture() -> Path:
+    return TUOMIOKIRJAT_ASTIA_FIXTURE
+
+
+@pytest.fixture
+def tuomiokirjat_search(tmp_path):
+    from ra_mcp_kansallisarkisto_lib.ingest import ingest_tuomiokirjat
+    from ra_mcp_kansallisarkisto_lib.search_operations import TuomiokirjatSearch
+
+    db = lancedb.connect(str(tmp_path / "tuomiokirjat.lance"))
+    ingest_tuomiokirjat(db, TUOMIOKIRJAT_FIXTURE, TUOMIOKIRJAT_ASTIA_FIXTURE)
+    return TuomiokirjatSearch(db)

@@ -129,6 +129,8 @@ claude mcp add kansallisarkisto -- uv run kansallisarkisto-mcp</code></pre>
         <li><code>df_get_charter</code> &mdash; One charter's full transcript and catalogue record by its DF number, the citable identifier carried on every hit.</li>
         <li><code>voudintilit_search</code> &mdash; Full-text search over voudintilit: 98,945 pages of the H&auml;me and Satakunta bailiffs' accounts, 1539&ndash;1635. Filter by bailiwick, account book and year; every hit cites its reference, account book, year and page, and links to the page image in Astia.</li>
         <li><code>voudintilit_get_page</code> &mdash; One page's full text by its page id, with the previous and next pages of its volume.</li>
+        <li><code>tuomiokirjat_search</code> &mdash; Full-text search over tuomiokirjat: 7.8 million pages of Finnish lower-court records, 1610&ndash;1931, from 223 archives. Filter by archive, series and year; every hit cites its series, signum, year and page, and links to the page image in Astia.</li>
+        <li><code>tuomiokirjat_get_page</code> &mdash; One court-record page's full text by its page id, with the previous and next pages of its volume.</li>
       </ul>
 
       <h3>Search tips</h3>
@@ -139,15 +141,18 @@ claude mcp add kansallisarkisto -- uv run kansallisarkisto-mcp</code></pre>
         <li>Several words must all appear; <code>"quoted words"</code> are an exact phrase; <code>bref|breff</code> matches either spelling. On the charters a trailing <code>*</code> is a prefix &mdash; <code>lepros*</code> reaches the Latin and German the stemmer does not &mdash; while the two page corpora are too large for one, so list spellings or use <code>fuzzy=1</code>.</li>
         <li>Language labels are unaccented Finnish: <code>venaja</code>, never <code>ven&auml;j&auml;</code>.</li>
         <li>36% of the charters are catalogued but never transcribed. They are still returned &mdash; findable by place, index term and language &mdash; and marked as untranscribed.</li>
+        <li>Voudintilit and tuomiokirjat are <strong>paged</strong>: each hit is one page of a volume, cited by its archival reference and linked to its image in Astia, and the page tools name the previous and next pages &mdash; accounts and cases run across pages. On the 7.8 million court pages common words match more than 10,000; narrow by archive, series or years.</li>
         <li>Transcripts are OCR/HTR output over a millennium of handwriting. Check any quotation against the archive.</li>
       </ul>
 
       <div>
         <span class="badge">Kansallisarkisto</span>
         <span class="badge">Diplomatarium Fennicum</span>
+        <span class="badge">Voudintilit</span>
+        <span class="badge">Tuomiokirjat</span>
         <span class="badge">LanceDB</span>
         <span class="badge">Full-text search</span>
-        <span class="badge">859&ndash;1530</span>
+        <span class="badge">859&ndash;1931</span>
       </div>
     </section>
 

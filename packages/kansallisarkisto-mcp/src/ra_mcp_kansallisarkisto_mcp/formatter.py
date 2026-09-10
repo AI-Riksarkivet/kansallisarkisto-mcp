@@ -177,6 +177,58 @@ def format_page(rec: dict[str, Any] | None, page_id: str) -> str:
     return "\n".join(lines)
 
 
+# --- tuomiokirjat pages ---------------------------------------------------------
+
+
+def _court_citation(rec: dict[str, Any]) -> str:
+    """How a court record is cited: series, the volume's signum, year, page."""
+    series = _oneline(str(rec.get("series") or "")) or "untitled series"
+    head = " ".join(part for part in (series, _oneline(str(rec.get("reference") or "")), _years(rec)) if part)
+    page = rec.get("page")
+    return f"**{head}, p. {page}**" if page is not None else f"**{head}**"
+
+
+def _render_court_page(rec: dict[str, Any], lines: list[str]) -> None:
+    lines.append(_court_citation(rec))
+    details = [_oneline(str(rec.get("collection") or "")), _oneline(str(rec.get("subseries") or "")), f"page {_oneline(str(rec.get('page_id') or '?'))}"]
+    lines.append("  " + " · ".join(d for d in details if d))
+    text = rec.get("text") or ""
+    lines.append(f"  {_snippet(text)}" if text.strip() else "  (no text recognised on this page)")
+    url = _oneline(str(rec.get("url") or ""))
+    lines.append(f"  {url}" if url else "  (no Astia link for this page)")
+    lines.append("")
+
+
+def format_tuomiokirjat_results(result: SearchResult) -> str:
+    return format_results(result, label="Tuomiokirjat", render_record=_render_court_page)
+
+
+def format_court_page(rec: dict[str, Any] | None, page_id: str) -> str:
+    """Render one court-record page in full, with the ids to read on in either direction."""
+    if rec is None:
+        return f"No page {_oneline(str(page_id))} in tuomiokirjat. A page id is the one shown on every tuomiokirjat_search hit — e.g. 'Y4Q4IZcBCao99UPKS6L8'."
+
+    lines = [_court_citation(rec), ""]
+    for label, key in (("Archive", "collection"), ("Series", "series"), ("Subseries", "subseries"), ("Record type", "unit"), ("Signum", "reference")):
+        if rec.get(key):
+            lines.append(f"{label}: {_oneline(str(rec[key]))}")
+    lines.append(f"Page id: {_oneline(str(rec.get('page_id') or page_id))}")
+    url = _oneline(str(rec.get("url") or ""))
+    lines.append(f"Page image in Astia: {url}" if url else "No Astia link for this page.")
+    previous, following = rec.get("previous_page_id"), rec.get("next_page_id")
+    lines.append(f"Previous page: {_oneline(previous)}" if previous else "Previous page: none (first page of this volume in the corpus)")
+    lines.append(f"Next page: {_oneline(following)}" if following else "Next page: none (last page of this volume in the corpus)")
+    lines.append("")
+
+    text = (rec.get("text") or "").strip()
+    if text:
+        lines.append("Text:")
+        lines.append(text)
+    else:
+        lines.append("No text was recognised on this page.")
+    return "\n".join(lines)
+
+
 def format_error(exc: Exception) -> str:
     """Render an unexpected failure for the client.
 

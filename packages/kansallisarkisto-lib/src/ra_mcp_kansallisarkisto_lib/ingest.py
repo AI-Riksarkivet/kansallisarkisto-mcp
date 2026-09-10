@@ -13,9 +13,9 @@ from typing import IO, TYPE_CHECKING, Any
 import pyarrow as pa
 
 from .astia import load_snapshot
-from .config import DF_TABLE, VOUDINTILIT_TABLE
-from .dataset import build_fts_index, build_scalar_indexes
-from .models import DfRecord, VoudintilitRecord
+from .config import DF_TABLE, TUOMIOKIRJAT_TABLE, VOUDINTILIT_TABLE
+from .dataset import FTS_COLUMN, build_fts_index, build_scalar_indexes
+from .models import DfRecord, TuomiokirjatRecord, VoudintilitRecord
 
 if TYPE_CHECKING:
     import lancedb
@@ -72,6 +72,28 @@ VOUDINTILIT_SCHEMA = pa.schema(
     ]
 )
 
+# No derived search column: the full-text index sits on `text` itself (see
+# TuomiokirjatRecord). `volume_id` is int64 because these ids exceed 32 bits.
+TUOMIOKIRJAT_SCHEMA = pa.schema(
+    [
+        pa.field("page_id", pa.string()),
+        pa.field("volume_id", pa.int64()),
+        pa.field("page", pa.int32()),
+        pa.field("file_id", pa.string()),
+        pa.field("collection", pa.string()),
+        pa.field("series", pa.string()),
+        pa.field("subseries", pa.string()),
+        pa.field("unit", pa.string()),
+        pa.field("reference", pa.string()),
+        pa.field("year_start", pa.int32()),
+        pa.field("year_end", pa.int32()),
+        pa.field("year_from", pa.int32()),
+        pa.field("year_to", pa.int32()),
+        pa.field("text", pa.string()),
+        pa.field("url", pa.string()),
+    ]
+)
+
 # Rows per Arrow batch handed to LanceDB. Small enough that the 19 GB
 # tuomiokirjat export never has to be materialised in memory, large enough that
 # per-batch overhead stays negligible on the 6,876-row df corpus.
@@ -91,16 +113,19 @@ def _record_batches(
     schema: pa.Schema,
     batch_size: int,
     corpus: str,
+    keep: Callable[[BaseModel], bool] | None = None,
 ) -> Iterator[pa.RecordBatch]:
     """Stream an export as Arrow batches conforming to ``schema``.
 
-    ``parse`` turns one source object into a record carrying a ``searchable_text``
-    property. A line that fails to parse is logged and skipped rather than aborting the
-    run: these are harvested exports, and losing one malformed line is preferable to
-    losing the whole ingest.
+    ``parse`` turns one source object into a record; when ``schema`` has the derived
+    :data:`FTS_COLUMN`, the record's ``searchable_text`` property fills it. ``keep``
+    may drop a parsed record — the de-duplication tuomiokirjat needs. A line that fails
+    to parse is logged and skipped rather than aborting the run: these are harvested
+    exports, and losing one malformed line is preferable to losing the whole ingest.
     """
     rows: list[dict[str, Any]] = []
-    kept = skipped = 0
+    kept = skipped = dropped = 0
+    derived = FTS_COLUMN in schema.names
 
     with _open_jsonl(jsonl_path) as handle:
         for lineno, line in enumerate(handle, start=1):
@@ -120,8 +145,12 @@ def _record_batches(
                 logger.warning("Skipping %s line %d: %s", jsonl_path.name, lineno, exc)
                 skipped += 1
                 continue
+            if keep is not None and not keep(record):
+                dropped += 1
+                continue
             flat = record.model_dump()
-            flat["searchable_text"] = record.searchable_text  # ty: ignore[unresolved-attribute]
+            if derived:
+                flat[FTS_COLUMN] = record.searchable_text  # ty: ignore[unresolved-attribute]
             rows.append(flat)
             kept += 1
 
@@ -132,7 +161,7 @@ def _record_batches(
     if rows:
         yield pa.RecordBatch.from_pylist(rows, schema=schema)
 
-    logger.info("Parsed %d %s records from %s (%d skipped)", kept, corpus, jsonl_path, skipped)
+    logger.info("Parsed %d %s records from %s (%d skipped, %d dropped as duplicates)", kept, corpus, jsonl_path, skipped, dropped)
 
 
 def _create_table(
@@ -249,3 +278,66 @@ def ingest_voudintilit(
         btree=("volume_id", "page", "year_from", "year_to"),
         bitmap=("collection",),
     )
+
+
+def ingest_tuomiokirjat(
+    db: lancedb.DBConnection,
+    jsonl_path: str | Path,
+    astia_path: str | Path | None = None,
+    *,
+    table_name: str = TUOMIOKIRJAT_TABLE,
+    batch_size: int = BATCH_SIZE,
+) -> lancedb.table.Table:
+    """Ingest the tuomiokirjat export into a LanceDB table, one record per image.
+
+    Sisältöhaku holds 60,000 images two or three times under distinct ids — the same
+    link and years, usually the same text. The first occurrence of each ``(volume,
+    page)`` is kept and the rest dropped, so no page is ever two hits. The set of
+    pairs seen is the ingest's one in-memory structure: 7.8M small ints, under a
+    gigabyte, on the machine that builds the table rather than the one that serves it.
+
+    The Astia snapshot (``scripts/fetch_astia.py --metadata-only``) supplies each
+    volume's signum; the export already carries every page's link. Without a snapshot
+    the pages are ingested without a reference rather than dropped.
+
+    The full-text index is built on ``text`` itself (see :class:`TuomiokirjatRecord`);
+    the page lookup rides the ``page_id`` BTree, the neighbour lookup ``volume_id`` and
+    ``page``.
+
+    Raises:
+        ValueError: If no records could be parsed from the export.
+    """
+    jsonl_path = Path(jsonl_path)
+    volumes = load_snapshot(astia_path) if astia_path is not None else {}
+    logger.info("Astia snapshot: %d volumes", len(volumes))
+
+    def parse(row: dict[str, Any]) -> TuomiokirjatRecord:
+        try:
+            volume = volumes.get(int(row.get("ay_id")))  # ty: ignore[invalid-argument-type]
+        except (TypeError, ValueError):
+            volume = None
+        return TuomiokirjatRecord.from_json(row, volume)
+
+    seen: set[int] = set()
+
+    def first_of_its_image(record: BaseModel) -> bool:
+        assert isinstance(record, TuomiokirjatRecord)
+        # A page whose number did not parse has no place in its volume to be a duplicate
+        # of, and is kept: keying such rows on a blank file_id would drop every one of
+        # them after the first. The rest pack into one int, so the set stays small.
+        if record.page is None:
+            return True
+        key = (record.volume_id << 32) | record.page
+        if key in seen:
+            return False
+        seen.add(key)
+        return True
+
+    batches = _record_batches(jsonl_path, parse, TUOMIOKIRJAT_SCHEMA, batch_size, "tuomiokirjat", keep=first_of_its_image)
+    _create_table(db, table_name, TUOMIOKIRJAT_SCHEMA, batches, jsonl_path, "tuomiokirjat")
+
+    # No bitmap on collection or series: both filters are substring LIKEs, which a
+    # bitmap cannot serve, and on 7.7M rows the indexes would cost build time and disk
+    # for nothing.
+    build_fts_index(db, table_name, column="text")
+    return build_scalar_indexes(db, table_name, btree=("page_id", "volume_id", "page", "year_from", "year_to"))

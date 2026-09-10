@@ -32,6 +32,11 @@ FILES_URL = ASTIA_URL + "ws/json/json_tiedostot.php?id={volume_id}"
 _PAGE_NUMBER = re.compile(r"(\d+)\s*$")
 
 
+def _label(value: Any) -> str:
+    """An Astia label as plain text: entities unescaped, whitespace normalised."""
+    return " ".join(html.unescape(str(value or "")).split())
+
+
 def _children(node: Any) -> dict[str, str]:
     """Flatten one of Astia's XML-as-JSON nodes to ``{child name: tagData}``."""
     if not isinstance(node, dict):
@@ -57,18 +62,21 @@ def parse_files(payload: dict[str, Any]) -> dict[int, str]:
 def parse_metadata(payload: dict[str, Any]) -> dict[str, str]:
     """The reference, title, dates, fonds and series, from a ``json_tiedot`` response.
 
-    Astia HTML-escapes its labels (``tilej&#xE4;``), so they are unescaped here. A date
-    of ``-`` means there is none — the Satakunta catalogue volume is dated that way.
+    Astia HTML-escapes its labels (``tilej&#xE4;``), so they are unescaped here, and
+    court-record series join their shelf prefix to the name with a non-breaking space
+    (``a/1&#xA0;Porin raastuvanoikeuden tuomiokirjat``), so whitespace is normalised to
+    single spaces. A date of ``-`` means there is none — the Satakunta catalogue volume
+    is dated that way.
     """
     levels: dict[str, str] = {}
     for level in payload.get("ylemmat") or []:
         fields = _children(level)
         if fields.get("TASO"):
-            levels[fields["TASO"]] = html.unescape(fields.get("LABEL") or "").strip()
+            levels[fields["TASO"]] = _label(fields.get("LABEL"))
     dates = str(payload.get("ajat") or "").strip()
     return {
         "reference": str(payload.get("tunnisteet") or "").strip(),
-        "title": html.unescape(str(payload.get("nimekkeet") or "")).strip(),
+        "title": _label(payload.get("nimekkeet")),
         "dates": "" if dates == "-" else dates,
         "fonds": levels.get("fonds", ""),
         "series": levels.get("series", ""),
