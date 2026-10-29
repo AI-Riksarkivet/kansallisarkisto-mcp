@@ -10,7 +10,7 @@ dependencies = [
     # The SDK and exporters live here only — this package owns initialisation.
     "opentelemetry-sdk>=1.28.0",
     "opentelemetry-exporter-otlp>=1.28.0",
-    "fastmcp==3.4.4",
+    "fastmcp==3.4.10",
 ]
 
 [project.scripts]
