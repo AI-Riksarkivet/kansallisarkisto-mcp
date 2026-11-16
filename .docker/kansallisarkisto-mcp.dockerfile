@@ -9,7 +9,7 @@
 # It is also the base the CI test and dev containers use, so the published image
 # runs on the same libc the tests ran on.
 # Base images digest-pinned so versioned image tags (vX.Y.Z) cannot drift on rebuild.
-FROM python:3.14-slim@sha256:cad9a2c871761c413caa6fdd6441c783451e740a48aaeba60ae62a8b53525ef6
+FROM python:3.15-slim@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928
 
 # uv from the official distroless image.
 COPY --from=ghcr.io/astral-sh/uv:0.12.5@sha256:db2d5999728c5837e1bf9ba278ee6b05cef1e95e82a20e27b0c915cb4478b9d7 /uv /uvx /bin/
